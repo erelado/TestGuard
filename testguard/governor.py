@@ -110,19 +110,25 @@ class Governor:
                         ),
                     )
 
-        # Panic near cgroup memory limit (only when max memory threshold is configured and both values exist).
-        if self._thresholds.max_rss_bytes > 0:
-            cgroup_current = fragments.get("cgroup_memory_current_bytes")
-            cgroup_max = fragments.get("cgroup_memory_max_bytes")
-            if isinstance(cgroup_current, (int, float)) \
-                    and isinstance(cgroup_max, (int, float)) and float(cgroup_max) > 0:
-                if float(cgroup_current) >= 0.95 * float(cgroup_max):
+        # Panic near cgroup memory limit (only when both values exist).
+        cgroup_current = fragments.get("cgroup_memory_current_bytes")
+        cgroup_max = fragments.get("cgroup_memory_max_bytes")
+
+        if cgroup_current is not None and cgroup_max is not None:
+            try:
+                current_val = float(cgroup_current)
+                max_val = float(cgroup_max)
+            except (TypeError, ValueError):
+                current_val = max_val = None
+
+            if max_val and max_val > 0 and current_val is not None:
+                if current_val >= 0.95 * max_val:
                     return GovernorDecision(
                         level="PANIC",
                         policy_id="memory.cgroup.near_limit.panic",
                         message=(
-                            f"Memory near cgroup limit: {int(cgroup_current)} bytes "
-                            f"(limit {int(cgroup_max)} bytes, threshold 95%)"
+                            f"Memory near cgroup limit: {int(current_val)} bytes "
+                            f"(limit {int(max_val)} bytes, threshold 95%)"
                         ),
                     )
 
