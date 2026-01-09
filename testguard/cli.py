@@ -3,13 +3,25 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import List
+from typing import Optional
 
 from testguard.engine import Engine
 from testguard.logger import configure_logging
 from testguard.report import render_list, render_report
 from testguard.store.sqlite_store import SQLiteRunStore
 from testguard.util import base_dir, db_path, host_facts, is_linux
+
+
+@dataclass(frozen=True)
+class RunOptions:
+    sample_interval_s: float
+    warn_rss_mib: int
+    max_rss_mib: int
+    max_runtime_s: Optional[float]
+    disk_write_mib_s: Optional[float]
+    disk_write_sustain_s: float
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -21,6 +33,55 @@ def build_arg_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run a command under TestGuard")
     run_parser.add_argument("--cwd", default=os.getcwd(), help="Working directory for the command")
     run_parser.add_argument("argv", nargs=argparse.REMAINDER, help="Command to run, after --")
+    run_parser.add_argument(
+        "--sample-every-seconds",
+        "--sample-interval-s",
+        dest="sample_interval_s",
+        type=float,
+        default=0.5,
+        help="How often to sample resource usage (seconds). Smaller values catch spikes better but add overhead.",
+    )
+    run_parser.add_argument(
+        "--warn-memory-mib",
+        "--warn-rss-mib",
+        dest="warn_rss_mib",
+        type=int,
+        default=0,
+        help="Warn (do not stop) if process memory (RSS) exceeds this many MiB. 0 disables.",
+    )
+    run_parser.add_argument(
+        "--max-memory-mib",
+        "--max-rss-mib",
+        dest="max_rss_mib",
+        type=int,
+        default=0,
+        help="Kill the run if process memory (RSS) exceeds this many MiB. 0 disables.",
+    )
+    run_parser.add_argument(
+        "--max-runtime-seconds",
+        "--max-runtime-s",
+        dest="max_runtime_s",
+        type=float,
+        default=None,
+        help="Kill the run if it runs longer than this many seconds. Omit to disable.",
+    )
+    run_parser.add_argument(
+        "--max-disk-write-mib-per-sec",
+        "--disk-write-mib-s",
+        dest="disk_write_mib_s",
+        type=float,
+        default=None,
+        help="Kill if disk write rate stays above this many MiB/s for the sustain window. Omit to disable.",
+    )
+    run_parser.add_argument(
+        "--disk-write-sustain-seconds",
+        "--disk-write-sustain-s",
+        dest="disk_write_sustain_s",
+        type=float,
+        default=3.0,
+        help="How long (seconds) disk write rate must stay above the threshold before killing "
+             "(only if disk threshold is set).",
+    )
 
     list_parser = subparsers.add_parser("list", help="List recent runs")
     list_parser.add_argument("--limit", type=int, default=20, help="Max runs to show")
@@ -53,7 +114,7 @@ def cmd_doctor() -> int:
     return 0
 
 
-def cmd_run(argv: List[str], cwd: str) -> int:
+def cmd_run(argv: List[str], cwd: str, run_options: RunOptions) -> int:
     if not argv:
         print("Usage: testguard run -- <command ...>")
         return 2
@@ -73,7 +134,17 @@ def cmd_run(argv: List[str], cwd: str) -> int:
     engine = Engine(store)
 
     environment = dict(os.environ)
-    run_id = engine.run_command(command_argv=argv, cwd=cwd, env=environment)
+    run_id = engine.run_command(
+        command_argv=argv,
+        cwd=cwd,
+        env=environment,
+        sample_interval_s=run_options.sample_interval_s,
+        warn_rss_mib=run_options.warn_rss_mib,
+        max_rss_mib=run_options.max_rss_mib,
+        max_runtime_s=run_options.max_runtime_s,
+        disk_write_mib_s=run_options.disk_write_mib_s,
+        disk_write_sustain_s=run_options.disk_write_sustain_s,
+    )
 
     run_record = store.load_run(run_id)
     print(f"run_id: {run_record.run_id}")
@@ -108,7 +179,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_doctor()
 
     if args.command == "run":
-        return cmd_run(args.argv, args.cwd)
+        run_options = RunOptions(
+            sample_interval_s=args.sample_interval_s,
+            warn_rss_mib=args.warn_rss_mib,
+            max_rss_mib=args.max_rss_mib,
+            max_runtime_s=args.max_runtime_s,
+            disk_write_mib_s=args.disk_write_mib_s,
+            disk_write_sustain_s=args.disk_write_sustain_s,
+        )
+        return cmd_run(args.argv, args.cwd, run_options)
 
     if args.command == "list":
         return cmd_list(args.limit)

@@ -24,6 +24,7 @@ class TestSQLiteRunStore(unittest.TestCase):
                 cwd=cwd,
                 signature_hash=signature_hash(command_argv, cwd),
                 host_facts_json=json.dumps({"k": "v"}),
+                run_config_json=json.dumps({}, separators=(",", ":")),
             )
             store.create_run(meta)
             store.finalize_run(

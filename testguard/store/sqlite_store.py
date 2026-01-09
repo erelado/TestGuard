@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS runs (
   cwd TEXT NOT NULL,
   signature_hash TEXT NOT NULL,
   host_facts_json TEXT NOT NULL,
+  run_config_json TEXT NOT NULL,
   status TEXT NOT NULL,
   exit_code INTEGER,
   signal INTEGER,
@@ -62,18 +63,26 @@ class SQLiteRunStore:
         connection.row_factory = sqlite3.Row
         return connection
 
+    def _ensure_column(self, connection: sqlite3.Connection, table: str, column: str, column_def: str) -> None:
+        rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+        existing = {row["name"] for row in rows}
+        if column in existing:
+            return
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+
     def init(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
             connection.executescript(_SCHEMA)
+            self._ensure_column(connection, "runs", "run_config_json", "TEXT NOT NULL DEFAULT '{}'")
 
     def create_run(self, meta: RunMeta) -> None:
         with self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO runs (run_id, started_at, command_argv_json, cwd,
-                                  signature_hash, host_facts_json, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                  signature_hash, host_facts_json, run_config_json, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     meta.run_id,
@@ -82,6 +91,7 @@ class SQLiteRunStore:
                     meta.cwd,
                     meta.signature_hash,
                     meta.host_facts_json,
+                    meta.run_config_json,
                     "RUNNING",
                 ),
             )

@@ -12,6 +12,7 @@ class RunMeta:
     cwd: str
     signature_hash: str
     host_facts_json: str
+    run_config_json: str
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class RunRecord:
     cwd: str
     signature_hash: str
     host_facts_json: str
+    run_config_json: str
     status: str
     exit_code: Optional[int]
     signal: Optional[int]
@@ -55,15 +57,15 @@ class RunStore(Protocol):
     def append_event(self, event: EventRecord) -> None: ...
 
     def finalize_run(
-        self,
-        run_id: str,
-        *,
-        ended_at: str,
-        status: str,
-        exit_code: Optional[int],
-        signal: Optional[int],
-        duration_s: float,
-        notes: Optional[str] = None,
+            self,
+            run_id: str,
+            *,
+            ended_at: str,
+            status: str,
+            exit_code: Optional[int],
+            signal: Optional[int],
+            duration_s: float,
+            notes: Optional[str] = None,
     ) -> None: ...
 
     def load_run(self, run_id: str) -> RunRecord: ...
