@@ -25,6 +25,7 @@ class RunOptions:
     max_runtime_s: Optional[float]
     disk_write_mib_s: Optional[float]
     disk_write_sustain_s: float
+    baseline_id: Optional[str]
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -299,6 +300,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_runtime_s=args.max_runtime_s,
             disk_write_mib_s=args.disk_write_mib_s,
             disk_write_sustain_s=args.disk_write_sustain_s,
+            baseline_id=args.baseline_id,
         )
         return cmd_run(args.argv, args.cwd, run_options)
 
