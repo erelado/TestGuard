@@ -6,20 +6,26 @@ import os
 from typing import List, Optional
 
 from testguard.engine import Engine
+from testguard.logger import configure_logging
+from testguard.report import render_list, render_report
 from testguard.store.sqlite_store import SQLiteRunStore
 from testguard.util import base_dir, db_path, host_facts, is_linux
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     arg_parser = argparse.ArgumentParser(prog="testguard")
+    arg_parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR)")
+
     subparsers = arg_parser.add_subparsers(dest="command", required=True)
 
     run_parser = subparsers.add_parser("run", help="Run a command under TestGuard")
     run_parser.add_argument("--cwd", default=os.getcwd(), help="Working directory for the command")
     run_parser.add_argument("argv", nargs=argparse.REMAINDER, help="Command to run, after --")
 
-    subparsers.add_parser("list", help="List recent runs (later step)")
-    report_parser = subparsers.add_parser("report", help="Show a stored run (later step)")
+    list_parser = subparsers.add_parser("list", help="List recent runs")
+    list_parser.add_argument("--limit", type=int, default=20, help="Max runs to show")
+
+    report_parser = subparsers.add_parser("report", help="Show a stored run")
     report_parser.add_argument("run_id")
 
     diff_parser = subparsers.add_parser("diff", help="Diff a run vs a baseline (later step)")
@@ -42,7 +48,8 @@ def cmd_doctor() -> int:
     print(f"cpu_count: {facts.cpu_count}")
     print(f"python: {facts.python}")
     print(f"cgroup_v2_mount: {facts.cgroup_v2_mount or 'none'}")
-    print("monitoring: Linux")
+    print("monitoring: currently Linux-only")
+    print("planned collectors: procfs, cgroupv2, psi (diagnostic), gpu (optional)")
     return 0
 
 
@@ -77,8 +84,25 @@ def cmd_run(argv: List[str], cwd: str) -> int:
     return 0 if run_record.status == "OK" else 1
 
 
+def cmd_list(limit: int) -> int:
+    store = SQLiteRunStore(db_path())
+    store.init()
+    run_records = store.list_runs(limit=limit)
+    print(render_list(run_records))
+    return 0
+
+
+def cmd_report(run_id: str) -> int:
+    store = SQLiteRunStore(db_path())
+    store.init()
+    run_record = store.load_run(run_id)
+    print(render_report(run_record))
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    configure_logging(args.log_level)
 
     if args.command == "doctor":
         return cmd_doctor()
@@ -86,7 +110,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "run":
         return cmd_run(args.argv, args.cwd)
 
-    if args.command in ("list", "report", "diff"):
+    if args.command == "list":
+        return cmd_list(args.limit)
+
+    if args.command == "report":
+        return cmd_report(args.run_id)
+
+    if args.command == "diff":
         print("Not implemented in this step.")
         return 2
 

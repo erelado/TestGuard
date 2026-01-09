@@ -18,7 +18,7 @@ def is_linux() -> bool:
 
 def require_linux(feature_name: str) -> None:
     if not is_linux():
-        raise RuntimeError(f"{feature_name} is Linux-only in the MVP.")
+        raise RuntimeError(f"{feature_name} is currently Linux-only.")
 
 
 def base_dir() -> Path:

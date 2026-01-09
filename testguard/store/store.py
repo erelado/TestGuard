@@ -32,16 +32,19 @@ class RunRecord:
 
 class RunStore(Protocol):
     def create_run(self, meta: RunMeta) -> None: ...
+
     def finalize_run(
-        self,
-        run_id: str,
-        *,
-        ended_at: str,
-        status: str,
-        exit_code: Optional[int],
-        signal: Optional[int],
-        duration_s: float,
-        notes: Optional[str] = None,
+            self,
+            run_id: str,
+            *,
+            ended_at: str,
+            status: str,
+            exit_code: Optional[int],
+            signal: Optional[int],
+            duration_s: float,
+            notes: Optional[str] = None,
     ) -> None: ...
+
     def load_run(self, run_id: str) -> RunRecord: ...
+
     def list_runs(self, limit: int = 50) -> List[RunRecord]: ...

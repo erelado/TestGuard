@@ -5,6 +5,7 @@ import time
 from typing import Dict, List, Optional
 
 from testguard.controller import SubprocessGroupController
+from testguard.logger import get_logger
 from testguard.store.sqlite_store import SQLiteRunStore
 from testguard.store.store import RunMeta
 from testguard.util import ensure_dirs, host_facts, make_run_id, now_utc_iso, runs_dir, signature_hash
@@ -20,8 +21,9 @@ class Engine:
         self._store.init()
 
         run_id = make_run_id()
-        started_at = now_utc_iso()
+        logger = get_logger(run_id=run_id)
 
+        started_at = now_utc_iso()
         run_directory = runs_dir() / run_id
         run_directory.mkdir(parents=True, exist_ok=False)
 
@@ -35,6 +37,7 @@ class Engine:
             host_facts_json=json.dumps(facts.__dict__, separators=(",", ":")),
         )
         self._store.create_run(meta)
+        logger.info("spawn command: %s", command_argv)
 
         start_monotonic = time.monotonic()
         handle = self._controller.spawn(argv=command_argv, cwd=cwd, env=env)
@@ -69,4 +72,5 @@ class Engine:
             duration_s=duration_s,
             notes=None,
         )
+        logger.info("completed status=%s exit_code=%s signal=%s duration_s=%.3f", status, exit_code, signal_number, duration_s)
         return run_id
