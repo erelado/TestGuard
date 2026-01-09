@@ -74,29 +74,50 @@ def render_list(run_records: List[RunRecord]) -> str:
     return "\n".join(lines)
 
 
-def render_report(run_record: RunRecord) -> str:
-    command_argv = json.loads(run_record.command_argv_json)
-    host_facts = json.loads(run_record.host_facts_json)
+def _fmt_duration(duration_s: Optional[float]) -> str:
+    if duration_s is None:
+        return "-"
+    return f"{duration_s:.3f}"
 
-    artifact_dir = runs_dir() / run_record.run_id
 
-    lines: List[str] = []
+def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_summary: DiffSummary) -> str:
+    lines = []
     lines.append(f"run_id: {run_record.run_id}")
-    lines.append(f"started_at: {run_record.started_at}")
-    lines.append(f"ended_at: {run_record.ended_at or '-'}")
-    lines.append(f"cwd: {run_record.cwd}")
     lines.append(f"status: {run_record.status}")
-    lines.append(f"duration_s: {run_record.duration_s if run_record.duration_s is not None else '-'}")
-    lines.append(f"exit_code: {run_record.exit_code if run_record.exit_code is not None else '-'}")
-    lines.append(f"signal: {run_record.signal if run_record.signal is not None else '-'}")
-    lines.append(f"signature_hash: {run_record.signature_hash}")
-    lines.append(f"artifacts_dir: {artifact_dir}")
+    lines.append(f"duration (sec): {_fmt_duration(current_metrics.duration_s)}")
+    lines.append(
+        f"exit_code: {run_record.exit_code if run_record.exit_code is not None else '-'}  signal: {run_record.signal if run_record.signal is not None else '-'}")
     lines.append("")
-    lines.append(f"cmd: {command_argv}")
+
+    lines.append("metrics:")
+    lines.append(f"  peak rss: {_format_bytes(current_metrics.peak_rss_bytes)}")
+    lines.append(f"  total read: {_format_bytes(current_metrics.total_read_bytes)}")
+    lines.append(f"  total write: {_format_bytes(current_metrics.total_write_bytes)}")
+    if current_metrics.peak_write_rate_bytes_s is None:
+        lines.append("  peak write rate: -")
+    else:
+        lines.append(f"  peak write rate: {_format_bytes(current_metrics.peak_write_rate_bytes_s)}/s")
     lines.append("")
-    lines.append("host_facts:")
-    for key in sorted(host_facts.keys()):
-        lines.append(f"  {key}: {host_facts[key]}")
+
+    lines.append("diff vs baseline:")
+    if diff_summary.baseline_run_id is None:
+        lines.append("  baseline: -")
+        lines.append("  classification: NO_BASELINE")
+    else:
+        lines.append(f"  baseline: {diff_summary.baseline_run_id}")
+        lines.append(f"  classification: {diff_summary.classification}")
+        lines.append(f"  duration: {_format_pct(diff_summary.duration_s.delta_pct)}")
+        lines.append(f"  peak rss: {_format_pct(diff_summary.peak_rss_bytes.delta_pct)}")
+        lines.append(f"  total write: {_format_pct(diff_summary.total_write_bytes.delta_pct)}")
+    lines.append("")
+
+    lines.append("recommendations:")
+    if not diff_summary.recommendations:
+        lines.append("  - none")
+    else:
+        for rec in diff_summary.recommendations:
+            lines.append(f"  - {rec['area']}: {rec['message']} (confidence: {rec['confidence']})")
+
     return "\n".join(lines)
 
 

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from testguard.analyze import RunMetrics, no_baseline_diff
 from testguard.report import render_list, render_report
 from testguard.store.sqlite_store import SQLiteRunStore
 from testguard.store.store import RunMeta
@@ -43,6 +44,20 @@ class TestReportRendering(unittest.TestCase):
             self.assertIn("20260109_000000_abcd", list_text)
 
             run_record = store.load_run(meta.run_id)
-            report_text = render_report(run_record)
+
+            # On macOS in this MVP, samples may be empty, so metrics are mostly None.
+            current_metrics = RunMetrics(
+                duration_s=run_record.duration_s,
+                peak_rss_bytes=None,
+                total_read_bytes=None,
+                total_write_bytes=None,
+                peak_write_rate_bytes_s=None,
+            )
+            diff_summary = no_baseline_diff(current_metrics)
+
+            report_text = render_report(run_record, current_metrics=current_metrics, diff_summary=diff_summary)
             self.assertIn("run_id: 20260109_000000_abcd", report_text)
-            self.assertIn("host_facts:", report_text)
+            self.assertIn("status:", report_text)
+            self.assertIn("metrics:", report_text)
+            self.assertIn("diff vs baseline:", report_text)
+            self.assertIn("recommendations:", report_text)

@@ -13,7 +13,8 @@ from testguard.logger import configure_logging
 from testguard.report import render_list, render_report
 from testguard.report import write_run_report_artifacts
 from testguard.store.sqlite_store import SQLiteRunStore
-from testguard.util import base_dir, db_path, host_facts, is_linux, runs_dir
+from testguard.util import base_dir, db_path, host_facts, is_linux
+from testguard.util import runs_dir
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     report_parser = subparsers.add_parser("report", help="Show a stored run")
     report_parser.add_argument("run_id")
+    report_parser.add_argument("--baseline", dest="baseline_id", default=None,
+                               help="Optional baseline run_id for diff")
 
     diff_parser = subparsers.add_parser("diff", help="Diff a run vs a baseline")
     diff_parser.add_argument("run_id")
@@ -98,6 +101,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("doctor", help="Show environment and collector availability")
 
     return arg_parser
+
+
+def _load_metrics_and_diff(*, store: SQLiteRunStore, run_id: str, baseline_id: Optional[str]) -> tuple:
+    run_record = store.load_run(run_id)
+    current_samples = store.list_samples(run_id)
+    current_metrics = compute_metrics(run_record, current_samples)
+
+    chosen_baseline_id = baseline_id
+    if chosen_baseline_id is None:
+        chosen_baseline_id = store.find_baseline_run_id(run_record.signature_hash, exclude_run_id=run_id)
+
+    if chosen_baseline_id is None:
+        diff_summary = no_baseline_diff(current_metrics)
+        return run_record, current_metrics, diff_summary
+
+    baseline_record = store.load_run(chosen_baseline_id)
+    baseline_samples = store.list_samples(chosen_baseline_id)
+    baseline_metrics = compute_metrics(baseline_record, baseline_samples)
+
+    diff_summary = diff_metrics(current_metrics, baseline_metrics, baseline_run_id=chosen_baseline_id)
+    return run_record, current_metrics, diff_summary
 
 
 def cmd_doctor() -> int:
@@ -148,12 +172,20 @@ def cmd_run(argv: List[str], cwd: str, run_options: RunOptions) -> int:
         disk_write_sustain_s=run_options.disk_write_sustain_s,
     )
 
-    run_record = store.load_run(run_id)
-    print(f"run_id: {run_record.run_id}")
-    print(f"cmd: {json.loads(run_record.command_argv_json)}")
-    print(f"status: {run_record.status}")
-    print(f"duration_s: {run_record.duration_s}")
-    print(f"exit_code: {run_record.exit_code}  signal: {run_record.signal}")
+    run_record, current_metrics, diff_summary = _load_metrics_and_diff(
+        store=store,
+        run_id=run_id,
+        baseline_id=None,
+    )
+
+    write_run_report_artifacts(
+        run_record=run_record,
+        current_metrics=current_metrics,
+        diff_summary=diff_summary,
+    )
+
+    print(render_report(run_record, current_metrics=current_metrics, diff_summary=diff_summary))
+    print(f"artifacts_dir: {runs_dir() / run_id}")
     return 0 if run_record.status == "OK" else 1
 
 
@@ -165,12 +197,26 @@ def cmd_list(limit: int) -> int:
     return 0
 
 
-def cmd_report(run_id: str) -> int:
+def cmd_report(run_id: str, baseline_id: Optional[str]) -> int:
     store = SQLiteRunStore(db_path())
     store.init()
-    run_record = store.load_run(run_id)
-    print(render_report(run_record))
+
+    run_record, current_metrics, diff_summary = _load_metrics_and_diff(
+        store=store,
+        run_id=run_id,
+        baseline_id=baseline_id,
+    )
+
+    write_run_report_artifacts(
+        run_record=run_record,
+        current_metrics=current_metrics,
+        diff_summary=diff_summary,
+    )
+
+    print(render_report(run_record, current_metrics=current_metrics, diff_summary=diff_summary))
+    print(f"artifacts_dir: {runs_dir() / run_id}")
     return 0
+
 
 
 def cmd_diff(run_id: str, baseline_id: Optional[str]) -> int:
@@ -235,7 +281,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_list(args.limit)
 
     if args.command == "report":
-        return cmd_report(args.run_id)
+        return cmd_report(args.run_id, args.baseline_id)
 
     if args.command == "diff":
         return cmd_diff(args.run_id, args.baseline_id)
