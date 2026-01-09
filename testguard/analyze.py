@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from testguard.store.store import RunRecord, SampleRecord
 
@@ -14,6 +14,26 @@ class RunMetrics:
     total_read_bytes: Optional[int]
     total_write_bytes: Optional[int]
     peak_write_rate_bytes_s: Optional[float]
+
+
+def _extract_int(payload: dict, key: str) -> Optional[int]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_float(payload: dict, key: str) -> Optional[float]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass(frozen=True)
@@ -57,78 +77,63 @@ def _parse_sample_payload(sample: SampleRecord) -> Dict[str, Any]:
         return {}
 
 
-def compute_metrics(run_record: RunRecord, samples: List[SampleRecord]) -> RunMetrics:
-    duration_s = run_record.duration_s
+def compute_metrics(run_record: RunRecord, samples: Iterable[SampleRecord]) -> RunMetrics:
+    peak_rss_bytes: Optional[int] = None
 
-    if not samples:
-        return RunMetrics(
-            duration_s=duration_s,
-            peak_rss_bytes=None,
-            total_read_bytes=None,
-            total_write_bytes=None,
-            peak_write_rate_bytes_s=None,
-        )
+    io_first_read: Optional[int] = None
+    io_last_read: Optional[int] = None
+    io_first_write: Optional[int] = None
+    io_last_write: Optional[int] = None
 
-    parsed = [(_parse_sample_payload(s), s.ts_monotonic) for s in samples]
+    last_ts: Optional[float] = None
+    last_write_bytes: Optional[int] = None
+    peak_write_rate_bytes_s: Optional[float] = None
 
-    def iter_numbers(key: str):
-        for payload, _ts in parsed:
-            value = payload.get(key)
-            if isinstance(value, (int, float)):
-                yield float(value)
+    for sample in samples:
+        payload = json.loads(sample.payload_json)
 
-    peak_rss = None
-    rss_values = list(iter_numbers("rss_bytes"))
-    if rss_values:
-        peak_rss = int(max(rss_values))
+        rss_bytes = _extract_int(payload, "rss_bytes")
+        if rss_bytes is not None:
+            if peak_rss_bytes is None or rss_bytes > peak_rss_bytes:
+                peak_rss_bytes = rss_bytes
 
-    def first_last_total(key: str) -> Optional[int]:
-        values: List[Tuple[float, float]] = []
-        for payload, ts in parsed:
-            raw = payload.get(key)
-            if isinstance(raw, (int, float)):
-                values.append((ts, float(raw)))
-        if len(values) < 2:
-            return None
-        values.sort(key=lambda x: x[0])
-        start = values[0][1]
-        end = values[-1][1]
-        total = end - start
-        if total < 0:
-            return None
-        return int(total)
+        read_bytes = _extract_int(payload, "io_read_bytes_total")
+        if read_bytes is not None:
+            if io_first_read is None:
+                io_first_read = read_bytes
+            io_last_read = read_bytes
 
-    total_read = first_last_total("io_read_bytes_total")
-    total_write = first_last_total("io_write_bytes_total")
+        write_bytes = _extract_int(payload, "io_write_bytes_total")
+        if write_bytes is not None:
+            if io_first_write is None:
+                io_first_write = write_bytes
+            io_last_write = write_bytes
 
-    peak_write_rate = None
-    write_points: List[Tuple[float, float]] = []
-    for payload, ts in parsed:
-        raw = payload.get("io_write_bytes_total")
-        if isinstance(raw, (int, float)):
-            write_points.append((ts, float(raw)))
-    write_points.sort(key=lambda x: x[0])
+            if last_ts is not None and last_write_bytes is not None:
+                delta_t = float(sample.ts_monotonic) - float(last_ts)
+                delta_write = write_bytes - last_write_bytes
+                if delta_t > 0 and delta_write >= 0:
+                    rate = delta_write / delta_t
+                    if peak_write_rate_bytes_s is None or rate > peak_write_rate_bytes_s:
+                        peak_write_rate_bytes_s = rate
 
-    if len(write_points) >= 2:
-        best = 0.0
-        for (t0, w0), (t1, w1) in zip(write_points, write_points[1:]):
-            dt = t1 - t0
-            dw = w1 - w0
-            if dt <= 0:
-                continue
-            if dw < 0:
-                continue
-            rate = dw / dt
-            if rate > best:
-                best = rate
-        peak_write_rate = best if best > 0 else None
+            last_ts = float(sample.ts_monotonic)
+            last_write_bytes = write_bytes
+
+    total_read_bytes = None
+    if io_first_read is not None and io_last_read is not None and io_last_read >= io_first_read:
+        total_read_bytes = io_last_read - io_first_read
+
+    total_write_bytes = None
+    if io_first_write is not None and io_last_write is not None and io_last_write >= io_first_write:
+        total_write_bytes = io_last_write - io_first_write
 
     return RunMetrics(
-        duration_s=duration_s,
-        peak_rss_bytes=peak_rss,
-        total_read_bytes=total_read,
-        total_write_bytes=total_write,
-        peak_write_rate_bytes_s=peak_write_rate,
+        duration_s=run_record.duration_s,
+        peak_rss_bytes=peak_rss_bytes,
+        total_read_bytes=total_read_bytes,
+        total_write_bytes=total_write_bytes,
+        peak_write_rate_bytes_s=peak_write_rate_bytes_s,
     )
 
 
