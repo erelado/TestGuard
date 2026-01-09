@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from dataclasses import dataclass
 from typing import List
 from typing import Optional
 
-from testguard.summarize import persist_summary_for_run
 from testguard.analyze import compute_metrics, diff_metrics, no_baseline_diff
 from testguard.engine import Engine
 from testguard.logger import configure_logging
 from testguard.report import render_list, render_report
 from testguard.report import write_run_report_artifacts
 from testguard.store.sqlite_store import SQLiteRunStore
+from testguard.summarize import persist_summary_for_run
 from testguard.util import base_dir, db_path, host_facts, is_linux
 from testguard.util import runs_dir
 
@@ -21,8 +20,8 @@ from testguard.util import runs_dir
 @dataclass(frozen=True)
 class RunOptions:
     sample_interval_s: float
-    warn_rss_mib: int
-    max_rss_mib: int
+    warn_memory_mib: int
+    max_memory_mib: int
     max_runtime_s: Optional[float]
     disk_write_mib_s: Optional[float]
     disk_write_sustain_s: float
@@ -43,24 +42,35 @@ def build_arg_parser() -> argparse.ArgumentParser:
         dest="sample_interval_s",
         type=float,
         default=0.5,
-        help="How often to sample resource usage (seconds). Smaller values catch spikes better but add overhead.",
+        help="How often to sample resource usage, in seconds. Smaller values catch spikes better but add overhead.",
     )
+
     run_parser.add_argument(
         "--warn-memory-mib",
         "--warn-rss-mib",
-        dest="warn_rss_mib",
+        dest="warn_memory_mib",
         type=int,
         default=0,
-        help="Warn (do not stop) if process memory (RSS) exceeds this many MiB. 0 disables.",
+        help=(
+            "Warn (do not stop) if memory usage exceeds this many MiB. "
+            "On Linux, prefers cgroup memory.current when available, otherwise uses RSS. "
+            "0 disables."
+        ),
     )
+
     run_parser.add_argument(
         "--max-memory-mib",
         "--max-rss-mib",
-        dest="max_rss_mib",
+        dest="max_memory_mib",
         type=int,
         default=0,
-        help="Kill the run if process memory (RSS) exceeds this many MiB. 0 disables.",
+        help=(
+            "Kill the run if memory usage exceeds this many MiB. "
+            "On Linux, prefers cgroup memory.current when available, otherwise uses RSS. "
+            "0 disables."
+        ),
     )
+
     run_parser.add_argument(
         "--max-runtime-seconds",
         "--max-runtime-s",
@@ -69,6 +79,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Kill the run if it runs longer than this many seconds. Omit to disable.",
     )
+
     run_parser.add_argument(
         "--max-disk-write-mib-per-sec",
         "--disk-write-mib-s",
@@ -77,14 +88,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Kill if disk write rate stays above this many MiB/s for the sustain window. Omit to disable.",
     )
+
     run_parser.add_argument(
         "--disk-write-sustain-seconds",
         "--disk-write-sustain-s",
         dest="disk_write_sustain_s",
         type=float,
         default=3.0,
-        help="How long (seconds) disk write rate must stay above the threshold before killing "
-             "(only if disk threshold is set).",
+        help=(
+            "How long (seconds) disk write rate must stay above the threshold before killing. "
+            "Only applies if the disk write threshold is set."
+        ),
     )
 
     list_parser = subparsers.add_parser("list", help="List recent runs")
@@ -166,8 +180,8 @@ def cmd_run(argv: List[str], cwd: str, run_options: RunOptions) -> int:
         cwd=cwd,
         env=environment,
         sample_interval_s=run_options.sample_interval_s,
-        warn_rss_mib=run_options.warn_rss_mib,
-        max_rss_mib=run_options.max_rss_mib,
+        warn_memory_mib=run_options.warn_memory_mib,
+        max_memory_mib=run_options.max_memory_mib,
         max_runtime_s=run_options.max_runtime_s,
         disk_write_mib_s=run_options.disk_write_mib_s,
         disk_write_sustain_s=run_options.disk_write_sustain_s,
@@ -222,7 +236,6 @@ def cmd_report(run_id: str, baseline_id: Optional[str]) -> int:
     return 0
 
 
-
 def cmd_diff(run_id: str, baseline_id: Optional[str]) -> int:
     store = SQLiteRunStore(db_path())
     store.init()
@@ -273,8 +286,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "run":
         run_options = RunOptions(
             sample_interval_s=args.sample_interval_s,
-            warn_rss_mib=args.warn_rss_mib,
-            max_rss_mib=args.max_rss_mib,
+            warn_memory_mib=args.warn_memory_mib,
+            max_memory_mib=args.max_memory_mib,
             max_runtime_s=args.max_runtime_s,
             disk_write_mib_s=args.disk_write_mib_s,
             disk_write_sustain_s=args.disk_write_sustain_s,

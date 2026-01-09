@@ -41,32 +41,64 @@ class SustainedCondition:
 class Governor:
     def __init__(self, thresholds: Thresholds) -> None:
         self._thresholds = thresholds
-        self._warned_rss = False
-        self._last_write_bytes: Optional[float] = None
-        self._last_ts: Optional[float] = None
-        self._write_sustained = SustainedCondition(required_seconds=thresholds.disk_write_sustain_s)
-        self._last_write_ts: Optional[float] = None
-        self._last_write_bytes: Optional[int] = None
+
+        self._warned_memory = False
+
+        self._last_write_total_bytes: Optional[float] = None
+        self._last_write_sample_ts: Optional[float] = None
         self._write_over_limit_since_ts: Optional[float] = None
 
     def evaluate(self, *, sample_ts: float, fragments: dict, started_monotonic: float) -> GovernorDecision:
+        # Prefer cgroup memory.current when available, fallback to RSS.
+        cgroup_current = fragments.get("cgroup_memory_current_bytes")
         rss_bytes = fragments.get("rss_bytes")
-        if isinstance(rss_bytes, (int, float)):
-            if (not self._warned_rss) and rss_bytes >= self._thresholds.warn_rss_bytes:
-                self._warned_rss = True
-                return GovernorDecision(
-                    level="WARN",
-                    policy_id="memory.rss.warn",
-                    message=f"RSS is high: {int(rss_bytes)} bytes (warn threshold {self._thresholds.warn_rss_bytes})",
-                )
 
-            if rss_bytes >= self._thresholds.max_rss_bytes:
-                return GovernorDecision(
-                    level="PANIC",
-                    policy_id="memory.rss.panic",
-                    message=f"RSS exceeded max: {int(rss_bytes)} bytes (max {self._thresholds.max_rss_bytes})",
-                )
+        observed_memory_bytes: Optional[float] = None
+        if isinstance(cgroup_current, (int, float)):
+            observed_memory_bytes = float(cgroup_current)
+        elif isinstance(rss_bytes, (int, float)):
+            observed_memory_bytes = float(rss_bytes)
 
+        # Warn / panic on configured memory thresholds (0 disables).
+        if observed_memory_bytes is not None:
+            if self._thresholds.warn_rss_bytes > 0:
+                if (not self._warned_memory) and observed_memory_bytes >= float(self._thresholds.warn_rss_bytes):
+                    self._warned_memory = True
+                    return GovernorDecision(
+                        level="WARN",
+                        policy_id="memory.usage.warn",
+                        message=(
+                            f"Memory usage is high: {int(observed_memory_bytes)} bytes "
+                            f"(warn threshold {self._thresholds.warn_rss_bytes})"
+                        ),
+                    )
+
+            if self._thresholds.max_rss_bytes > 0:
+                if observed_memory_bytes >= float(self._thresholds.max_rss_bytes):
+                    return GovernorDecision(
+                        level="PANIC",
+                        policy_id="memory.usage.panic",
+                        message=(
+                            f"Memory usage exceeded max: {int(observed_memory_bytes)} bytes "
+                            f"(max {self._thresholds.max_rss_bytes})"
+                        ),
+                    )
+
+        # Panic near cgroup memory limit (only when both values exist).
+        cgroup_max = fragments.get("cgroup_memory_max_bytes")
+        if isinstance(cgroup_current, (int, float)) and isinstance(cgroup_max, (int, float)):
+            if float(cgroup_max) > 0:
+                if float(cgroup_current) >= 0.95 * float(cgroup_max):
+                    return GovernorDecision(
+                        level="PANIC",
+                        policy_id="memory.cgroup.near_limit.panic",
+                        message=(
+                            f"Memory near cgroup limit: {int(cgroup_current)} bytes "
+                            f"(limit {int(cgroup_max)} bytes, threshold 95%)"
+                        ),
+                    )
+
+        # Timeout panic
         if self._thresholds.max_runtime_s is not None:
             elapsed_s = sample_ts - started_monotonic
             if elapsed_s >= self._thresholds.max_runtime_s:
@@ -76,18 +108,19 @@ class Governor:
                     message=f"Runtime exceeded max: {elapsed_s:.2f}s (max {self._thresholds.max_runtime_s:.2f}s)",
                 )
 
+        # Disk write sustained panic
         write_rate_limit = self._thresholds.disk_write_rate_bytes_s
         if write_rate_limit is not None and write_rate_limit > 0:
             write_total = fragments.get("io_write_bytes_total")
             if isinstance(write_total, (int, float)):
                 write_total_bytes = float(write_total)
 
-                if self._last_write_bytes is not None and self._last_ts is not None:
+                if self._last_write_total_bytes is not None and self._last_write_sample_ts is not None:
                     interval_end_ts = float(sample_ts)
-                    interval_start_ts = float(self._last_ts)
+                    interval_start_ts = float(self._last_write_sample_ts)
 
                     interval_seconds = interval_end_ts - interval_start_ts
-                    written_bytes = write_total_bytes - float(self._last_write_bytes)
+                    written_bytes = write_total_bytes - float(self._last_write_total_bytes)
 
                     if interval_seconds > 0 and written_bytes >= 0:
                         write_rate_bytes_s = written_bytes / interval_seconds
@@ -95,7 +128,6 @@ class Governor:
 
                         if is_over_limit:
                             if self._write_over_limit_since_ts is None:
-                                # Important: the high rate was true for the whole interval
                                 self._write_over_limit_since_ts = interval_start_ts
 
                             sustained_seconds = interval_end_ts - float(self._write_over_limit_since_ts)
@@ -111,10 +143,9 @@ class Governor:
                         else:
                             self._write_over_limit_since_ts = None
                     else:
-                        # Bad sample, reset sustained window.
                         self._write_over_limit_since_ts = None
 
-                self._last_write_bytes = write_total_bytes
-                self._last_ts = float(sample_ts)
+                self._last_write_total_bytes = write_total_bytes
+                self._last_write_sample_ts = float(sample_ts)
 
         return GovernorDecision(level="NONE", policy_id=None, message=None)

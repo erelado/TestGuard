@@ -43,8 +43,8 @@ class Engine:
             env: Dict[str, str],
             *,
             sample_interval_s: float = 0.5,
-            warn_rss_mib: int = 0,
-            max_rss_mib: int = 0,
+            warn_memory_mib: int = 0,
+            max_memory_mib: int = 0,
             max_runtime_s: Optional[float] = None,
             disk_write_mib_s: Optional[float] = None,
             disk_write_sustain_s: float = 3.0,
@@ -54,8 +54,8 @@ class Engine:
     ) -> str:
         run_options = RunOptions(
             sample_interval_s=sample_interval_s,
-            warn_rss_mib=warn_rss_mib,
-            max_rss_mib=max_rss_mib,
+            warn_rss_mib=warn_memory_mib,
+            max_rss_mib=max_memory_mib,
             max_runtime_s=max_runtime_s,
             disk_write_mib_s=disk_write_mib_s,
             disk_write_sustain_s=disk_write_sustain_s,

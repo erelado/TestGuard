@@ -8,12 +8,6 @@ from testguard.store.store import RunRecord
 from testguard.util import runs_dir
 
 
-def _truncate(text: str, max_len: int) -> str:
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 3] + "..."
-
-
 def _format_duration_seconds(duration_s: float | None) -> str:
     if duration_s is None:
         return "-"
@@ -29,7 +23,7 @@ def _format_exit_code(exit_code: int | None) -> str:
 
 
 def _format_signal(signal_number: int | None) -> str:
-    return "" if signal_number is None else str(signal_number)
+    return "-" if signal_number is None else str(signal_number)
 
 
 def render_list(run_records: List[RunRecord]) -> str:
@@ -46,22 +40,19 @@ def render_list(run_records: List[RunRecord]) -> str:
         "warnings",
     ]
 
-    def fmt(value: object) -> str:
-        return "N/A" if value is None else str(value)
-
     rows: List[List[str]] = []
     for run in run_records:
         rows.append(
             [
-                fmt(run.started_at),
-                fmt(run.run_id),
-                fmt(run.status),
+                run.started_at or "-",
+                run.run_id or "-",
+                run.status or "-",
                 _format_duration_seconds(run.duration_s),
-                fmt(run.exit_code),
-                fmt(run.signal),
+                _format_exit_code(run.exit_code),
+                _format_signal(run.signal),
                 _format_bytes(run.peak_rss_bytes),
                 _format_bytes(run.total_write_bytes),
-                fmt(run.warnings_count),
+                str(run.warnings_count),
             ]
         )
 
@@ -87,12 +78,6 @@ def render_list(run_records: List[RunRecord]) -> str:
     return "\n".join(lines)
 
 
-def _fmt_duration(duration_s: Optional[float]) -> str:
-    if duration_s is None:
-        return "-"
-    return f"{duration_s:.3f}"
-
-
 def _format_bytes(num: object) -> str:
     if num is None:
         return "-"
@@ -113,18 +98,12 @@ def _format_pct(pct: object) -> str:
     return f"{sign}{pct_value:.1f}%"
 
 
-def _format_duration(duration_s: object) -> str:
-    if duration_s is None:
-        return "-"
-    return f"{float(duration_s):.3f}"
-
-
 def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_summary: DiffSummary) -> str:
     lines: list[str] = []
 
     lines.append(f"run_id: {run_record.run_id}")
     lines.append(f"status: {run_record.status}")
-    lines.append(f"duration (sec): {_format_duration(current_metrics.duration_s)}")
+    lines.append(f"duration (sec): {_format_duration_seconds(current_metrics.duration_s)}")
     exit_code_text = str(run_record.exit_code) if run_record.exit_code is not None else "-"
     signal_text = str(run_record.signal) if run_record.signal is not None else "-"
     lines.append(f"exit_code: {exit_code_text}  signal: {signal_text}")
@@ -209,6 +188,7 @@ def write_run_report_artifacts(
     md_lines.append("")
     md_lines.append(f"run_id: `{run_record.run_id}`")
     md_lines.append(f"status: `{run_record.status}`")
+    md_lines.append(f"duration (sec): `{_format_duration_seconds(current_metrics.duration_s)}`")
     md_lines.append(
         f"duration (sec): `{current_metrics.duration_s if current_metrics.duration_s is not None else '-'}`")
     md_lines.append(f"exit_code: `{run_record.exit_code if run_record.exit_code is not None else '-'}`")
