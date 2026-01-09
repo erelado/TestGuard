@@ -80,13 +80,41 @@ def _fmt_duration(duration_s: Optional[float]) -> str:
     return f"{duration_s:.3f}"
 
 
+def _format_bytes(num: object) -> str:
+    if num is None:
+        return "-"
+    value = float(num)
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    unit_index = 0
+    while value >= 1024.0 and unit_index < len(units) - 1:
+        value /= 1024.0
+        unit_index += 1
+    return f"{value:.2f}{units[unit_index]}"
+
+
+def _format_pct(pct: object) -> str:
+    if pct is None:
+        return "-"
+    pct_value = float(pct)
+    sign = "+" if pct_value >= 0 else ""
+    return f"{sign}{pct_value:.1f}%"
+
+
+def _format_duration(duration_s: object) -> str:
+    if duration_s is None:
+        return "-"
+    return f"{float(duration_s):.3f}"
+
+
 def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_summary: DiffSummary) -> str:
-    lines = []
+    lines: list[str] = []
+
     lines.append(f"run_id: {run_record.run_id}")
     lines.append(f"status: {run_record.status}")
-    lines.append(f"duration (sec): {_fmt_duration(current_metrics.duration_s)}")
-    lines.append(
-        f"exit_code: {run_record.exit_code if run_record.exit_code is not None else '-'}  signal: {run_record.signal if run_record.signal is not None else '-'}")
+    lines.append(f"duration (sec): {_format_duration(current_metrics.duration_s)}")
+    exit_code_text = str(run_record.exit_code) if run_record.exit_code is not None else "-"
+    signal_text = str(run_record.signal) if run_record.signal is not None else "-"
+    lines.append(f"exit_code: {exit_code_text}  signal: {signal_text}")
     lines.append("")
 
     lines.append("metrics:")
@@ -119,25 +147,6 @@ def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_su
             lines.append(f"  - {rec['area']}: {rec['message']} (confidence: {rec['confidence']})")
 
     return "\n".join(lines)
-
-
-def _format_bytes(num: Optional[float]) -> str:
-    if num is None:
-        return "-"
-    value = float(num)
-    units = ["B", "KiB", "MiB", "GiB", "TiB"]
-    unit_index = 0
-    while value >= 1024.0 and unit_index < len(units) - 1:
-        value /= 1024.0
-        unit_index += 1
-    return f"{value:.2f}{units[unit_index]}"
-
-
-def _format_pct(pct: Optional[float]) -> str:
-    if pct is None:
-        return "-"
-    sign = "+" if pct >= 0 else ""
-    return f"{sign}{pct:.1f}%"
 
 
 def _metric_line(name: str, current: Optional[float], baseline: Optional[float], delta_pct: Optional[float]) -> str:
