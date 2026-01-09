@@ -38,6 +38,15 @@ class SustainedCondition:
         return (ts - self._start_ts) >= self._required_seconds
 
 
+def _pick_observed_memory_bytes(fragments: dict) -> Optional[int]:
+    # Prefer cgroup v2 memory.current when available, otherwise fall back to RSS.
+    for key in ("cgroup_memory_current_bytes", "rss_bytes"):
+        value = fragments.get(key)
+        if isinstance(value, (int, float)) and value >= 0:
+            return int(value)
+    return None
+
+
 class Governor:
     def __init__(self, thresholds: Thresholds) -> None:
         self._thresholds = thresholds
@@ -49,15 +58,32 @@ class Governor:
         self._write_over_limit_since_ts: Optional[float] = None
 
     def evaluate(self, *, sample_ts: float, fragments: dict, started_monotonic: float) -> GovernorDecision:
-        # Prefer cgroup memory.current when available, fallback to RSS.
-        cgroup_current = fragments.get("cgroup_memory_current_bytes")
-        rss_bytes = fragments.get("rss_bytes")
+        observed_memory_bytes = _pick_observed_memory_bytes(fragments)
 
-        observed_memory_bytes: Optional[float] = None
-        if isinstance(cgroup_current, (int, float)):
-            observed_memory_bytes = float(cgroup_current)
-        elif isinstance(rss_bytes, (int, float)):
-            observed_memory_bytes = float(rss_bytes)
+        if observed_memory_bytes is not None:
+            warn_bytes = int(self._thresholds.warn_rss_bytes)
+            max_bytes = int(self._thresholds.max_rss_bytes)
+
+            if warn_bytes > 0 and (not self._warned_memory) and observed_memory_bytes >= warn_bytes:
+                self._warned_memory = True
+                return GovernorDecision(
+                    level="WARN",
+                    policy_id="memory.usage.warn",
+                    message=(
+                        f"Memory usage is high: {observed_memory_bytes} bytes "
+                        f"(warn threshold {warn_bytes})"
+                    ),
+                )
+
+            if max_bytes > 0 and observed_memory_bytes >= max_bytes:
+                return GovernorDecision(
+                    level="PANIC",
+                    policy_id="memory.usage.panic",
+                    message=(
+                        f"Memory usage exceeded max: {observed_memory_bytes} bytes "
+                        f"(max {max_bytes})"
+                    ),
+                )
 
         # Warn / panic on configured memory thresholds (0 disables).
         if observed_memory_bytes is not None:
@@ -84,10 +110,12 @@ class Governor:
                         ),
                     )
 
-        # Panic near cgroup memory limit (only when both values exist).
-        cgroup_max = fragments.get("cgroup_memory_max_bytes")
-        if isinstance(cgroup_current, (int, float)) and isinstance(cgroup_max, (int, float)):
-            if float(cgroup_max) > 0:
+        # Panic near cgroup memory limit (only when max memory threshold is configured and both values exist).
+        if self._thresholds.max_rss_bytes > 0:
+            cgroup_current = fragments.get("cgroup_memory_current_bytes")
+            cgroup_max = fragments.get("cgroup_memory_max_bytes")
+            if isinstance(cgroup_current, (int, float)) \
+                    and isinstance(cgroup_max, (int, float)) and float(cgroup_max) > 0:
                 if float(cgroup_current) >= 0.95 * float(cgroup_max):
                     return GovernorDecision(
                         level="PANIC",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from testguard.analyze import RunMetrics, DiffSummary
+from testguard.analyze import DiffSummary, RunMetrics
 from testguard.store.store import RunRecord
 from testguard.util import runs_dir
 
@@ -25,14 +25,34 @@ def _format_exit_code(exit_code: int | None) -> str:
 def _format_signal(signal_number: int | None) -> str:
     return "-" if signal_number is None else str(signal_number)
 
+
 def _format_psi_avg10(value: object) -> str:
     if value is None:
         return "-"
     return f"{float(value):.2f}%"
 
 
+def _format_bytes(num: object) -> str:
+    if num is None:
+        return "-"
+    value = float(num)
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    unit_index = 0
+    while value >= 1024.0 and unit_index < len(units) - 1:
+        value /= 1024.0
+        unit_index += 1
+    return f"{value:.2f}{units[unit_index]}"
+
+
+def _format_pct(pct: object) -> str:
+    if pct is None:
+        return "-"
+    pct_value = float(pct)
+    sign = "+" if pct_value >= 0 else ""
+    return f"{sign}{pct_value:.1f}%"
+
+
 def render_list(run_records: List[RunRecord]) -> str:
-    # Build display rows first, then compute widths for clean alignment.
     header = [
         "started at",
         "run id",
@@ -66,7 +86,7 @@ def render_list(run_records: List[RunRecord]) -> str:
     for col_index in range(len(header)):
         widths.append(max(len(row[col_index]) for row in all_rows))
 
-    right_align_columns = {3, 4, 5, 6, 7, 8}  # duration, exit, signal, bytes, warnings
+    right_align_columns = {3, 4, 5, 6, 7, 8}
 
     def format_row(row: List[str]) -> str:
         parts: List[str] = []
@@ -83,44 +103,34 @@ def render_list(run_records: List[RunRecord]) -> str:
     return "\n".join(lines)
 
 
-def _format_bytes(num: object) -> str:
-    if num is None:
-        return "-"
-    value = float(num)
-    units = ["B", "KiB", "MiB", "GiB", "TiB"]
-    unit_index = 0
-    while value >= 1024.0 and unit_index < len(units) - 1:
-        value /= 1024.0
-        unit_index += 1
-    return f"{value:.2f}{units[unit_index]}"
-
-
-def _format_pct(pct: object) -> str:
-    if pct is None:
-        return "-"
-    pct_value = float(pct)
-    sign = "+" if pct_value >= 0 else ""
-    return f"{sign}{pct_value:.1f}%"
-
-
 def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_summary: DiffSummary) -> str:
     lines: list[str] = []
 
     lines.append(f"run_id: {run_record.run_id}")
     lines.append(f"status: {run_record.status}")
-    exit_code_text = str(run_record.exit_code) if run_record.exit_code is not None else "-"
-    signal_text = str(run_record.signal) if run_record.signal is not None else "-"
+    lines.append(f"duration (sec): {_format_duration_seconds(current_metrics.duration_s)}")
+
+    exit_code_text = _format_exit_code(run_record.exit_code)
+    signal_text = _format_signal(run_record.signal)
     lines.append(f"exit_code: {exit_code_text}  signal: {signal_text}")
     lines.append("")
 
     lines.append("metrics:")
-    lines.append(f"  peak rss: {_format_bytes(current_metrics.peak_rss_bytes)}")
+    # Note: peak_rss_bytes now represents "peak observed memory" (cgroup current preferred, else RSS).
+    lines.append(f"  peak memory: {_format_bytes(current_metrics.peak_rss_bytes)}")
     lines.append(f"  total read: {_format_bytes(current_metrics.total_read_bytes)}")
     lines.append(f"  total write: {_format_bytes(current_metrics.total_write_bytes)}")
+
     if current_metrics.peak_write_rate_bytes_s is None:
         lines.append("  peak write rate: -")
     else:
         lines.append(f"  peak write rate: {_format_bytes(current_metrics.peak_write_rate_bytes_s)}/s")
+
+    lines.append(
+        "  psi memory pressure avg10: "
+        f"some={_format_psi_avg10(current_metrics.psi_memory_some_avg10_peak)} "
+        f"full={_format_psi_avg10(current_metrics.psi_memory_full_avg10_peak)}"
+    )
     lines.append("")
 
     lines.append("diff vs baseline:")
@@ -131,7 +141,7 @@ def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_su
         lines.append(f"  baseline: {diff_summary.baseline_run_id}")
         lines.append(f"  classification: {diff_summary.classification}")
         lines.append(f"  duration: {_format_pct(diff_summary.duration_s.delta_pct)}")
-        lines.append(f"  peak rss: {_format_pct(diff_summary.peak_rss_bytes.delta_pct)}")
+        lines.append(f"  peak memory: {_format_pct(diff_summary.peak_rss_bytes.delta_pct)}")
         lines.append(f"  total write: {_format_pct(diff_summary.total_write_bytes.delta_pct)}")
     lines.append("")
 
@@ -146,14 +156,16 @@ def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_su
 
 
 def _metric_line(name: str, current: Optional[float], baseline: Optional[float], delta_pct: Optional[float]) -> str:
-    return f"| {name} | {current if current is not None else '-'} | {baseline if baseline is not None else '-'} | {_format_pct(delta_pct)} |"
+    current_text = current if current is not None else "-"
+    baseline_text = baseline if baseline is not None else "-"
+    return f"| {name} | {current_text} | {baseline_text} | {_format_pct(delta_pct)} |"
 
 
 def write_run_report_artifacts(
-        *,
-        run_record: RunRecord,
-        current_metrics: RunMetrics,
-        diff_summary: DiffSummary,
+    *,
+    run_record: RunRecord,
+    current_metrics: RunMetrics,
+    diff_summary: DiffSummary,
 ) -> None:
     run_directory = runs_dir() / run_record.run_id
     run_directory.mkdir(parents=True, exist_ok=True)
@@ -189,31 +201,31 @@ def write_run_report_artifacts(
     }
     (run_directory / "run_report.json").write_text(json.dumps(report_json, indent=2, sort_keys=True), encoding="utf-8")
 
-    md_lines = []
+    md_lines: list[str] = []
     md_lines.append("# TestGuard run report")
     md_lines.append("")
     md_lines.append(f"run_id: `{run_record.run_id}`")
     md_lines.append(f"status: `{run_record.status}`")
     md_lines.append(f"duration (sec): `{_format_duration_seconds(current_metrics.duration_s)}`")
-    md_lines.append(
-        f"duration (sec): `{current_metrics.duration_s if current_metrics.duration_s is not None else '-'}`")
-    md_lines.append(f"exit_code: `{run_record.exit_code if run_record.exit_code is not None else '-'}`")
-    md_lines.append(f"signal: `{run_record.signal if run_record.signal is not None else '-'}`")
+    md_lines.append(f"exit_code: `{_format_exit_code(run_record.exit_code)}`")
+    md_lines.append(f"signal: `{_format_signal(run_record.signal)}`")
     md_lines.append("")
 
     md_lines.append("## Metrics")
     md_lines.append("")
-    md_lines.append(f"- peak RSS: {_format_bytes(current_metrics.peak_rss_bytes)}")
+    md_lines.append(f"- peak memory: {_format_bytes(current_metrics.peak_rss_bytes)}")
     md_lines.append(f"- total read: {_format_bytes(current_metrics.total_read_bytes)}")
     md_lines.append(f"- total write: {_format_bytes(current_metrics.total_write_bytes)}")
+    if current_metrics.peak_write_rate_bytes_s is None:
+        md_lines.append("- peak write rate: -")
+    else:
+        md_lines.append(f"- peak write rate: {_format_bytes(current_metrics.peak_write_rate_bytes_s)}/s")
     md_lines.append(
-        f"- peak write rate: {_format_bytes(current_metrics.peak_write_rate_bytes_s)}/s" if current_metrics.peak_write_rate_bytes_s is not None else "- peak write rate: -")
-    md_lines.append("")
-    md_lines.append(
-        f"- psi memory pressure avg10: "
+        "- psi memory pressure avg10: "
         f"some={_format_psi_avg10(current_metrics.psi_memory_some_avg10_peak)} "
         f"full={_format_psi_avg10(current_metrics.psi_memory_full_avg10_peak)}"
     )
+    md_lines.append("")
 
     md_lines.append("## Diff vs baseline")
     md_lines.append("")
@@ -222,20 +234,11 @@ def write_run_report_artifacts(
     md_lines.append("")
     md_lines.append("| metric | current | baseline | delta |")
     md_lines.append("|---|---:|---:|---:|")
-    md_lines.append(_metric_line("duration_s", diff_summary.duration_s.current, diff_summary.duration_s.baseline,
-                                 diff_summary.duration_s.delta_pct))
-
-    md_lines.append(
-        _metric_line("peak_rss_bytes", diff_summary.peak_rss_bytes.current, diff_summary.peak_rss_bytes.baseline,
-                     diff_summary.peak_rss_bytes.delta_pct))
-    md_lines.append(
-        _metric_line("total_read_bytes", diff_summary.total_read_bytes.current, diff_summary.total_read_bytes.baseline,
-                     diff_summary.total_read_bytes.delta_pct))
-    md_lines.append(_metric_line("total_write_bytes", diff_summary.total_write_bytes.current,
-                                 diff_summary.total_write_bytes.baseline, diff_summary.total_write_bytes.delta_pct))
-    md_lines.append(_metric_line("peak_write_rate_bytes_s", diff_summary.peak_write_rate_bytes_s.current,
-                                 diff_summary.peak_write_rate_bytes_s.baseline,
-                                 diff_summary.peak_write_rate_bytes_s.delta_pct))
+    md_lines.append(_metric_line("duration_s", diff_summary.duration_s.current, diff_summary.duration_s.baseline, diff_summary.duration_s.delta_pct))
+    md_lines.append(_metric_line("peak_rss_bytes", diff_summary.peak_rss_bytes.current, diff_summary.peak_rss_bytes.baseline, diff_summary.peak_rss_bytes.delta_pct))
+    md_lines.append(_metric_line("total_read_bytes", diff_summary.total_read_bytes.current, diff_summary.total_read_bytes.baseline, diff_summary.total_read_bytes.delta_pct))
+    md_lines.append(_metric_line("total_write_bytes", diff_summary.total_write_bytes.current, diff_summary.total_write_bytes.baseline, diff_summary.total_write_bytes.delta_pct))
+    md_lines.append(_metric_line("peak_write_rate_bytes_s", diff_summary.peak_write_rate_bytes_s.current, diff_summary.peak_write_rate_bytes_s.baseline, diff_summary.peak_write_rate_bytes_s.delta_pct))
     md_lines.append("")
 
     md_lines.append("## Recommendations")
