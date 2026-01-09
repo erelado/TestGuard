@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from testguard.store.store import RunRecord
 from testguard.util import runs_dir
@@ -15,24 +13,63 @@ def _truncate(text: str, max_len: int) -> str:
     return text[: max_len - 3] + "..."
 
 
+def _format_duration_seconds(duration_s: float | None) -> str:
+    if duration_s is None:
+        return "-"
+    if duration_s < 1.0:
+        return f"{duration_s:.3f}"
+    if duration_s < 10.0:
+        return f"{duration_s:.2f}"
+    return f"{duration_s:.1f}"
+
+
+def _format_exit_code(exit_code: int | None) -> str:
+    return "-" if exit_code is None else str(exit_code)
+
+
+def _format_signal(signal_number: int | None) -> str:
+    return "" if signal_number is None else str(signal_number)
+
+
 def render_list(run_records: List[RunRecord]) -> str:
-    lines: List[str] = []
-    header = "started_at                  run_id                 status   dur_s   exit"
-    lines.append(header)
-    lines.append("-" * len(header))
+    # Build display rows first, then compute widths for clean alignment.
+    header = ["started at", "run id", "status", "duration (sec)", "exit code", "signal"]
 
+    rows: List[List[str]] = []
     for record in run_records:
-        duration = f"{record.duration_s:.1f}" if record.duration_s is not None else "-"
-        exit_part = "-"
-        if record.exit_code is not None:
-            exit_part = str(record.exit_code)
-        elif record.signal is not None:
-            exit_part = f"sig:{record.signal}"
-
-        lines.append(
-            f"{record.started_at:26} {record.run_id:20} {record.status:7} {duration:6} {exit_part:5}"
+        rows.append(
+            [
+                record.started_at,
+                record.run_id,
+                record.status,
+                _format_duration_seconds(record.duration_s),
+                _format_exit_code(record.exit_code),
+                _format_signal(record.signal),
+            ]
         )
 
+    all_rows = [header] + rows
+    col_count = len(header)
+
+    widths = []
+    for col_index in range(col_count):
+        widths.append(max(len(row[col_index]) for row in all_rows))
+
+    # Right align numeric-ish columns.
+    right_align = {3, 4, 5}
+
+    def format_row(values: List[str]) -> str:
+        parts = []
+        for col_index, value in enumerate(values):
+            width = widths[col_index]
+            if col_index in right_align:
+                parts.append(value.rjust(width))
+            else:
+                parts.append(value.ljust(width))
+        return "  ".join(parts)
+
+    lines = [format_row(header), format_row(["-" * w for w in widths])]
+    lines.extend(format_row(row) for row in rows)
     return "\n".join(lines)
 
 
