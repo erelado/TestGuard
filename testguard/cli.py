@@ -7,11 +7,13 @@ from dataclasses import dataclass
 from typing import List
 from typing import Optional
 
+from testguard.analyze import compute_metrics, diff_metrics, no_baseline_diff
 from testguard.engine import Engine
 from testguard.logger import configure_logging
 from testguard.report import render_list, render_report
+from testguard.report import write_run_report_artifacts
 from testguard.store.sqlite_store import SQLiteRunStore
-from testguard.util import base_dir, db_path, host_facts, is_linux
+from testguard.util import base_dir, db_path, host_facts, is_linux, runs_dir
 
 
 @dataclass(frozen=True)
@@ -89,7 +91,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser("report", help="Show a stored run")
     report_parser.add_argument("run_id")
 
-    diff_parser = subparsers.add_parser("diff", help="Diff a run vs a baseline (later step)")
+    diff_parser = subparsers.add_parser("diff", help="Diff a run vs a baseline")
     diff_parser.add_argument("run_id")
     diff_parser.add_argument("--baseline", dest="baseline_id", default=None)
 
@@ -171,6 +173,46 @@ def cmd_report(run_id: str) -> int:
     return 0
 
 
+def cmd_diff(run_id: str, baseline_id: Optional[str]) -> int:
+    store = SQLiteRunStore(db_path())
+    store.init()
+
+    run_record = store.load_run(run_id)
+    current_samples = store.list_samples(run_id)
+    current_metrics = compute_metrics(run_record, current_samples)
+
+    chosen_baseline_id = baseline_id
+    if chosen_baseline_id is None:
+        chosen_baseline_id = store.find_baseline_run_id(run_record.signature_hash, exclude_run_id=run_id)
+
+    if chosen_baseline_id is None:
+        diff_summary = no_baseline_diff(current_metrics)
+        write_run_report_artifacts(run_record=run_record, current_metrics=current_metrics, diff_summary=diff_summary)
+        print(f"No baseline found for signature_hash={run_record.signature_hash}")
+        print(f"Wrote artifacts to: {runs_dir() / run_id}")
+        return 0
+
+    baseline_record = store.load_run(chosen_baseline_id)
+    baseline_samples = store.list_samples(chosen_baseline_id)
+    baseline_metrics = compute_metrics(baseline_record, baseline_samples)
+
+    diff_summary = diff_metrics(current_metrics, baseline_metrics, baseline_run_id=chosen_baseline_id)
+
+    write_run_report_artifacts(run_record=run_record, current_metrics=current_metrics, diff_summary=diff_summary)
+
+    print(f"run_id: {run_record.run_id}")
+    print(f"baseline: {chosen_baseline_id}")
+    print(f"classification: {diff_summary.classification}")
+    print("recommendations:")
+    if not diff_summary.recommendations:
+        print("  - none")
+    else:
+        for rec in diff_summary.recommendations:
+            print(f"  - {rec['area']}: {rec['message']} (confidence: {rec['confidence']})")
+    print(f"artifacts_dir: {runs_dir() / run_id}")
+    return 0 if diff_summary.classification != "REGRESSION" else 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
     configure_logging(args.log_level)
@@ -196,8 +238,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_report(args.run_id)
 
     if args.command == "diff":
-        print("Not implemented in this step.")
-        return 2
+        return cmd_diff(args.run_id, args.baseline_id)
 
     print("Unknown command")
     return 2

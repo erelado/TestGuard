@@ -159,3 +159,49 @@ class SQLiteRunStore:
                 """,
                 (event.run_id, event.ts_monotonic, event.event_type, event.message, event.policy_id),
             )
+
+    def find_baseline_run_id(self, signature_hash: str, *, exclude_run_id: Optional[str] = None) -> Optional[str]:
+        self.init()
+        with self._connect() as connection:
+            if exclude_run_id is None:
+                row = connection.execute(
+                    """
+                    SELECT run_id
+                    FROM runs
+                    WHERE signature_hash = ?
+                      AND status = 'OK'
+                      AND exit_code = 0
+                    ORDER BY started_at DESC LIMIT 1
+                    """,
+                    (signature_hash,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT run_id
+                    FROM runs
+                    WHERE signature_hash = ?
+                      AND status = 'OK'
+                      AND exit_code = 0
+                      AND run_id != ?
+                    ORDER BY started_at DESC
+                        LIMIT 1
+                    """,
+                    (signature_hash, exclude_run_id),
+                ).fetchone()
+
+            return None if row is None else str(row["run_id"])
+
+    def list_samples(self, run_id: str) -> List[SampleRecord]:
+        self.init()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT run_id, ts_monotonic, ts_wall_epoch, payload_json
+                FROM samples
+                WHERE run_id = ?
+                ORDER BY ts_monotonic ASC
+                """,
+                (run_id,),
+            ).fetchall()
+            return [SampleRecord(**dict(row)) for row in rows]
