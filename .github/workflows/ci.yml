@@ -57,13 +57,22 @@ jobs:
           run_id="$(echo "$out" | sed -n 's/^run_id: //p' | head -n1)"
           run_dir="$HOME/.testguard/runs/$run_id"
           echo "Run dir: $run_dir"
-          test -f "$run_dir/run_report.json" || (echo "❌ Missing run_report.json" && exit 1)
+
+          if [[ ! -f "$run_dir/run_report.json" ]]; then
+            echo "❌ Missing run_report.json"
+            exit 1
+          fi
+
           status=$(jq -r '.status' "$run_dir/run_report.json")
           if [[ "$status" == "KILLED" ]]; then
             echo "✅ Kill detected (memory panic)"
           else
             echo "⚠️ Run completed normally (expected on restricted CI cgroups, status=$status)"
           fi
+
+          # Show summary for log visibility
+          cat "$run_dir/run_report.md" || true
+          echo "run_id=$run_id" >> "$GITHUB_ENV"
 
       - name: Timeout governor demo
         shell: bash
@@ -73,6 +82,27 @@ jobs:
           echo "$out"
           run_id="$(echo "$out" | sed -n 's/^run_id: //p' | head -n1)"
           run_dir="$HOME/.testguard/runs/$run_id"
-          jq '.status' "$run_dir/run_report.json"
-          jq '.status' "$run_dir/run_report.json" | grep -Eq '"(KILLED|OK)"' || echo "⚠️ No timeout kill detected"
-          echo "✅ Timeout test done"
+          echo "Run dir: $run_dir"
+
+          if [[ ! -f "$run_dir/run_report.json" ]]; then
+            echo "❌ Missing run_report.json"
+            exit 1
+          fi
+
+          status=$(jq -r '.status' "$run_dir/run_report.json")
+          if [[ "$status" == "KILLED" ]]; then
+            echo "✅ Timeout kill detected"
+          else
+            echo "⚠️ No timeout kill detected (status=$status)"
+          fi
+
+          cat "$run_dir/run_report.md" || true
+          echo "last_run_id=$run_id" >> "$GITHUB_ENV"
+
+      - name: Upload TestGuard artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testguard-artifacts-${{ env.run_id || env.last_run_id }}
+          path: ~/.testguard/runs/
+          retention-days: 30
