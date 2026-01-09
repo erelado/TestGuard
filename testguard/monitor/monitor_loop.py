@@ -6,7 +6,7 @@ from typing import Dict, Optional, Sequence
 
 from testguard.logger import ContextLoggerAdapter, get_logger, get_named_logger
 from testguard.monitor.collectors.base import CollectorAdapter, Target
-from testguard.monitor.ringbuffer import RingBuffer
+from testguard.monitor.ring_buffer import RingBuffer
 
 
 @dataclass(frozen=True)

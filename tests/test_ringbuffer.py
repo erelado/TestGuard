@@ -1,6 +1,6 @@
 import unittest
 
-from testguard.monitor.ringbuffer import RingBuffer
+from testguard.monitor.ring_buffer import RingBuffer
 
 
 class TestRingBuffer(unittest.TestCase):
