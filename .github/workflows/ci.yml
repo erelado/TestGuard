@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          allow-prereleases: true
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Unit tests
+        run: uv run python -m unittest discover -t . -s tests -p "test_*.py" -v
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          allow-prereleases: true
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install editable
+        run: uv pip install -e .
+
+      - name: Memory governor demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$(uv run testguard run --max-memory-mib 64 -- python -m testguard.demo.workload --alloc-mib 256 --hold-s 10 || true)"
+          echo "$out"
+          run_id="$(echo "$out" | sed -n 's/^run_id: //p' | head -n1)"
+          test -n "$run_id"
+          run_dir="$HOME/.testguard/runs/$run_id"
+          test -f "$run_dir/post_mortem.md"
+          test -f "$run_dir/run_report.json"
+          jq '.status' "$run_dir/run_report.json" | grep -q '"KILLED"'
+          echo "✅ Memory kill test passed"
+
+      - name: Timeout governor demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$(uv run testguard run --max-runtime-s 1 -- python -m testguard.demo.workload --hold-s 5 || true)"
+          echo "$out"
+          run_id="$(echo "$out" | sed -n 's/^run_id: //p' | head -n1)"
+          test -n "$run_id"
+          run_dir="$HOME/.testguard/runs/$run_id"
+          jq '.status' "$run_dir/run_report.json" | grep -q '"KILLED"'
+          echo "✅ Timeout kill test passed"
