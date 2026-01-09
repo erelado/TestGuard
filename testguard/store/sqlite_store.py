@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import List, Optional
 
-from testguard.store.store import RunMeta, RunRecord
+from testguard.store.store import EventRecord, RunMeta, RunRecord, SampleRecord
 
 _SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -27,6 +27,29 @@ CREATE TABLE IF NOT EXISTS runs (
 
 CREATE INDEX IF NOT EXISTS idx_runs_signature_started
 ON runs(signature_hash, started_at);
+
+CREATE TABLE IF NOT EXISTS samples (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  ts_monotonic REAL NOT NULL,
+  ts_wall_epoch REAL NOT NULL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_samples_run_id
+ON samples(run_id);
+
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  ts_monotonic REAL NOT NULL,
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  policy_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_run_id
+ON events(run_id);
 """
 
 
@@ -103,3 +126,26 @@ class SQLiteRunStore:
                 (int(limit),),
             ).fetchall()
             return [RunRecord(**dict(row)) for row in rows]
+
+    def append_samples(self, run_id: str, samples: List[SampleRecord]) -> None:
+        if not samples:
+            return
+        rows = [(s.run_id, s.ts_monotonic, s.ts_wall_epoch, s.payload_json) for s in samples]
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO samples (run_id, ts_monotonic, ts_wall_epoch, payload_json)
+                VALUES (?, ?, ?, ?)
+                """,
+                rows,
+            )
+
+    def append_event(self, event: EventRecord) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO events (run_id, ts_monotonic, event_type, message, policy_id)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (event.run_id, event.ts_monotonic, event.event_type, event.message, event.policy_id),
+            )

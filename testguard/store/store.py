@@ -30,19 +30,40 @@ class RunRecord:
     notes: Optional[str]
 
 
+@dataclass(frozen=True)
+class SampleRecord:
+    run_id: str
+    ts_monotonic: float
+    ts_wall_epoch: float
+    payload_json: str
+
+
+@dataclass(frozen=True)
+class EventRecord:
+    run_id: str
+    ts_monotonic: float
+    event_type: str
+    message: str
+    policy_id: Optional[str]
+
+
 class RunStore(Protocol):
     def create_run(self, meta: RunMeta) -> None: ...
 
+    def append_samples(self, run_id: str, samples: List[SampleRecord]) -> None: ...
+
+    def append_event(self, event: EventRecord) -> None: ...
+
     def finalize_run(
-            self,
-            run_id: str,
-            *,
-            ended_at: str,
-            status: str,
-            exit_code: Optional[int],
-            signal: Optional[int],
-            duration_s: float,
-            notes: Optional[str] = None,
+        self,
+        run_id: str,
+        *,
+        ended_at: str,
+        status: str,
+        exit_code: Optional[int],
+        signal: Optional[int],
+        duration_s: float,
+        notes: Optional[str] = None,
     ) -> None: ...
 
     def load_run(self, run_id: str) -> RunRecord: ...

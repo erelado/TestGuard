@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Optional, Sequence
 
-from testguard.logger import ContextLoggerAdapter, get_logger
+from testguard.logger import ContextLoggerAdapter, get_logger, get_named_logger
 from testguard.monitor.collectors.base import CollectorAdapter, Target
 from testguard.monitor.ringbuffer import RingBuffer
 
@@ -12,6 +12,7 @@ from testguard.monitor.ringbuffer import RingBuffer
 @dataclass(frozen=True)
 class Sample:
     ts_monotonic: float
+    ts_wall_epoch: float
     fragments: Dict[str, float]
 
 
@@ -38,7 +39,7 @@ class MonitorLoop:
         ring_capacity = max(1, int(config.ring_buffer_seconds / config.sample_interval_s))
         self._ring_buffer = RingBuffer[Sample](capacity=ring_capacity)
 
-        self._logger = logger or get_logger()
+        self._logger = logger or get_named_logger(__name__)
 
     @property
     def ring_buffer(self) -> RingBuffer[Sample]:
@@ -50,7 +51,11 @@ class MonitorLoop:
             fragment = collector.sample(self._target)
             fragments.update(fragment.values)
 
-        sample = Sample(ts_monotonic=time.monotonic(), fragments=fragments)
+        sample = Sample(
+            ts_monotonic=time.monotonic(),
+            ts_wall_epoch=time.time(),
+            fragments=fragments,
+        )
         self._ring_buffer.append(sample)
         return sample
 
