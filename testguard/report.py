@@ -25,6 +25,11 @@ def _format_exit_code(exit_code: int | None) -> str:
 def _format_signal(signal_number: int | None) -> str:
     return "-" if signal_number is None else str(signal_number)
 
+def _format_psi_avg10(value: object) -> str:
+    if value is None:
+        return "-"
+    return f"{float(value):.2f}%"
+
 
 def render_list(run_records: List[RunRecord]) -> str:
     # Build display rows first, then compute widths for clean alignment.
@@ -103,7 +108,6 @@ def render_report(run_record: RunRecord, *, current_metrics: RunMetrics, diff_su
 
     lines.append(f"run_id: {run_record.run_id}")
     lines.append(f"status: {run_record.status}")
-    lines.append(f"duration (sec): {_format_duration_seconds(current_metrics.duration_s)}")
     exit_code_text = str(run_record.exit_code) if run_record.exit_code is not None else "-"
     signal_text = str(run_record.signal) if run_record.signal is not None else "-"
     lines.append(f"exit_code: {exit_code_text}  signal: {signal_text}")
@@ -169,6 +173,8 @@ def write_run_report_artifacts(
             "total_read_bytes": current_metrics.total_read_bytes,
             "total_write_bytes": current_metrics.total_write_bytes,
             "peak_write_rate_bytes_s": current_metrics.peak_write_rate_bytes_s,
+            "psi_memory_some_avg10_peak": current_metrics.psi_memory_some_avg10_peak,
+            "psi_memory_full_avg10_peak": current_metrics.psi_memory_full_avg10_peak,
         },
         "diff": {
             "baseline_run_id": diff_summary.baseline_run_id,
@@ -203,6 +209,11 @@ def write_run_report_artifacts(
     md_lines.append(
         f"- peak write rate: {_format_bytes(current_metrics.peak_write_rate_bytes_s)}/s" if current_metrics.peak_write_rate_bytes_s is not None else "- peak write rate: -")
     md_lines.append("")
+    md_lines.append(
+        f"- psi memory pressure avg10: "
+        f"some={_format_psi_avg10(current_metrics.psi_memory_some_avg10_peak)} "
+        f"full={_format_psi_avg10(current_metrics.psi_memory_full_avg10_peak)}"
+    )
 
     md_lines.append("## Diff vs baseline")
     md_lines.append("")

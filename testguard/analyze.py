@@ -14,6 +14,8 @@ class RunMetrics:
     total_read_bytes: Optional[int]
     total_write_bytes: Optional[int]
     peak_write_rate_bytes_s: Optional[float]
+    psi_memory_some_avg10_peak: Optional[float] = None
+    psi_memory_full_avg10_peak: Optional[float] = None
 
 
 def _extract_int(payload: dict, key: str) -> Optional[int]:
@@ -88,9 +90,21 @@ def compute_metrics(run_record: RunRecord, samples: Iterable[SampleRecord]) -> R
     last_ts: Optional[float] = None
     last_write_bytes: Optional[int] = None
     peak_write_rate_bytes_s: Optional[float] = None
+    psi_some_avg10_peak: Optional[float] = None
+    psi_full_avg10_peak: Optional[float] = None
 
     for sample in samples:
         payload = json.loads(sample.payload_json)
+
+        psi_some = _extract_float(payload, "psi_memory_some_avg10")
+        if psi_some is not None:
+            if psi_some_avg10_peak is None or psi_some > psi_some_avg10_peak:
+                psi_some_avg10_peak = psi_some
+
+        psi_full = _extract_float(payload, "psi_memory_full_avg10")
+        if psi_full is not None:
+            if psi_full_avg10_peak is None or psi_full > psi_full_avg10_peak:
+                psi_full_avg10_peak = psi_full
 
         rss_bytes = _extract_int(payload, "rss_bytes")
         if rss_bytes is not None:
@@ -134,6 +148,8 @@ def compute_metrics(run_record: RunRecord, samples: Iterable[SampleRecord]) -> R
         total_read_bytes=total_read_bytes,
         total_write_bytes=total_write_bytes,
         peak_write_rate_bytes_s=peak_write_rate_bytes_s,
+        psi_memory_some_avg10_peak=psi_some_avg10_peak,
+        psi_memory_full_avg10_peak=psi_full_avg10_peak,
     )
 
 

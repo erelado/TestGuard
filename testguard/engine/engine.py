@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from testguard.monitor.collectors.psi import PsiCollector
 from testguard.monitor.collectors.cgroupv2 import CgroupV2Collector
 from testguard.controller import ProcessHandle, SubprocessGroupController
 from testguard.logger import ContextLoggerAdapter, get_logger, get_named_logger
@@ -180,7 +181,9 @@ class Engine:
         cgroup_collector = CgroupV2Collector.for_run(run_id=run_id, pid=handle.popen.pid)
         if cgroup_collector is not None:
             collectors.append(cgroup_collector)
+
         collectors.append(ProcfsCollector())
+        collectors.append(PsiCollector())
 
         monitor_config = MonitorConfig(
             sample_interval_s=run_options.sample_interval_s,
