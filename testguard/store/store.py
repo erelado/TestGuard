@@ -30,6 +30,11 @@ class RunRecord:
     signal: Optional[int]
     duration_s: Optional[float]
     notes: Optional[str]
+    peak_rss_bytes: Optional[int] = None
+    total_read_bytes: Optional[int] = None
+    total_write_bytes: Optional[int] = None
+    peak_write_rate_bytes_s: Optional[float] = None
+    warnings_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,16 @@ class EventRecord:
     event_type: str
     message: str
     policy_id: Optional[str]
+
+@dataclass(frozen=True)
+class RunSummaryRecord:
+    run_id: str
+    peak_rss_bytes: Optional[int]
+    total_read_bytes: Optional[int]
+    total_write_bytes: Optional[int]
+    peak_write_rate_bytes_s: Optional[float]
+    warnings_count: int
+
 
 
 class RunStore(Protocol):

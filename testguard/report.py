@@ -34,43 +34,56 @@ def _format_signal(signal_number: int | None) -> str:
 
 def render_list(run_records: List[RunRecord]) -> str:
     # Build display rows first, then compute widths for clean alignment.
-    header = ["started at", "run id", "status", "duration (sec)", "exit code", "signal"]
+    header = [
+        "started at",
+        "run id",
+        "status",
+        "duration (sec)",
+        "exit code",
+        "signal",
+        "peak rss",
+        "total write",
+        "warnings",
+    ]
+
+    def fmt(value: object) -> str:
+        return "N/A" if value is None else str(value)
 
     rows: List[List[str]] = []
-    for record in run_records:
+    for run in run_records:
         rows.append(
             [
-                record.started_at,
-                record.run_id,
-                record.status,
-                _format_duration_seconds(record.duration_s),
-                _format_exit_code(record.exit_code),
-                _format_signal(record.signal),
+                fmt(run.started_at),
+                fmt(run.run_id),
+                fmt(run.status),
+                _format_duration_seconds(run.duration_s),
+                fmt(run.exit_code),
+                fmt(run.signal),
+                _format_bytes(run.peak_rss_bytes),
+                _format_bytes(run.total_write_bytes),
+                fmt(run.warnings_count),
             ]
         )
 
     all_rows = [header] + rows
-    col_count = len(header)
-
-    widths = []
-    for col_index in range(col_count):
+    widths: List[int] = []
+    for col_index in range(len(header)):
         widths.append(max(len(row[col_index]) for row in all_rows))
 
-    # Right align numeric-ish columns.
-    right_align = {3, 4, 5}
+    right_align_columns = {3, 4, 5, 6, 7, 8}  # duration, exit, signal, bytes, warnings
 
-    def format_row(values: List[str]) -> str:
-        parts = []
-        for col_index, value in enumerate(values):
-            width = widths[col_index]
-            if col_index in right_align:
-                parts.append(value.rjust(width))
-            else:
-                parts.append(value.ljust(width))
+    def format_row(row: List[str]) -> str:
+        parts: List[str] = []
+        for col_index, cell in enumerate(row):
+            pad = widths[col_index]
+            parts.append(cell.rjust(pad) if col_index in right_align_columns else cell.ljust(pad))
         return "  ".join(parts)
 
-    lines = [format_row(header), format_row(["-" * w for w in widths])]
-    lines.extend(format_row(row) for row in rows)
+    lines = [format_row(header)]
+    lines.append("  ".join("-" * w for w in widths))
+    for row in rows:
+        lines.append(format_row(row))
+
     return "\n".join(lines)
 
 

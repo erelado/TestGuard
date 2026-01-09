@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import List
 from typing import Optional
 
+from testguard.summarize import persist_summary_for_run
 from testguard.analyze import compute_metrics, diff_metrics, no_baseline_diff
 from testguard.engine import Engine
 from testguard.logger import configure_logging
@@ -177,6 +178,9 @@ def cmd_run(argv: List[str], cwd: str, run_options: RunOptions) -> int:
         run_id=run_id,
         baseline_id=None,
     )
+
+    persist_summary_for_run(store, run_record)
+    run_record = store.load_run(run_id)
 
     write_run_report_artifacts(
         run_record=run_record,

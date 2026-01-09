@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import List, Optional
 
-from testguard.store.store import EventRecord, RunMeta, RunRecord, SampleRecord
+from testguard.store.store import EventRecord, RunMeta, RunRecord, SampleRecord, RunSummaryRecord
 
 _SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -51,6 +51,17 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_run_id
 ON events(run_id);
+
+CREATE TABLE IF NOT EXISTS summaries (
+  run_id TEXT PRIMARY KEY,
+  peak_rss_bytes INTEGER,
+  total_read_bytes INTEGER,
+  total_write_bytes INTEGER,
+  peak_write_rate_bytes_s REAL,
+  warnings_count INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+);
+
 """
 
 
@@ -74,7 +85,6 @@ class SQLiteRunStore:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
             connection.executescript(_SCHEMA)
-            self._ensure_column(connection, "runs", "run_config_json", "TEXT NOT NULL DEFAULT '{}'")
 
     def create_run(self, meta: RunMeta) -> None:
         with self._connect() as connection:
@@ -124,7 +134,21 @@ class SQLiteRunStore:
 
     def load_run(self, run_id: str) -> RunRecord:
         with self._connect() as connection:
-            row = connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+            row = connection.execute(
+                """
+                SELECT r.*,
+                       s.peak_rss_bytes,
+                       s.total_read_bytes,
+                       s.total_write_bytes,
+                       s.peak_write_rate_bytes_s,
+                       s.warnings_count
+                FROM runs r
+                         LEFT JOIN summaries s ON s.run_id = r.run_id
+                WHERE r.run_id = ?
+                """,
+                (run_id,),
+            ).fetchone()
+
             if row is None:
                 raise KeyError(f"Unknown run_id: {run_id}")
             return RunRecord(**dict(row))
@@ -132,9 +156,20 @@ class SQLiteRunStore:
     def list_runs(self, limit: int = 50) -> List[RunRecord]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM runs ORDER BY started_at DESC LIMIT ?",
+                """
+                SELECT r.*,
+                       s.peak_rss_bytes,
+                       s.total_read_bytes,
+                       s.total_write_bytes,
+                       s.peak_write_rate_bytes_s,
+                       s.warnings_count
+                FROM runs r
+                         LEFT JOIN summaries s ON s.run_id = r.run_id
+                ORDER BY r.started_at DESC LIMIT ?
+                """,
                 (int(limit),),
             ).fetchall()
+
             return [RunRecord(**dict(row)) for row in rows]
 
     def append_samples(self, run_id: str, samples: List[SampleRecord]) -> None:
@@ -159,6 +194,49 @@ class SQLiteRunStore:
                 """,
                 (event.run_id, event.ts_monotonic, event.event_type, event.message, event.policy_id),
             )
+
+    def upsert_summary(self, summary: RunSummaryRecord) -> None:
+        self.init()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO summaries (run_id,
+                                       peak_rss_bytes,
+                                       total_read_bytes,
+                                       total_write_bytes,
+                                       peak_write_rate_bytes_s,
+                                       warnings_count)
+                VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(run_id) DO
+                UPDATE SET
+                    peak_rss_bytes=excluded.peak_rss_bytes,
+                    total_read_bytes=excluded.total_read_bytes,
+                    total_write_bytes=excluded.total_write_bytes,
+                    peak_write_rate_bytes_s=excluded.peak_write_rate_bytes_s,
+                    warnings_count=excluded.warnings_count
+                """,
+                (
+                    summary.run_id,
+                    summary.peak_rss_bytes,
+                    summary.total_read_bytes,
+                    summary.total_write_bytes,
+                    summary.peak_write_rate_bytes_s,
+                    int(summary.warnings_count),
+                ),
+            )
+
+    def count_warnings(self, run_id: str) -> int:
+        self.init()
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(1) AS n
+                FROM events
+                WHERE run_id = ?
+                  AND event_type = 'WARN'
+                """,
+                (run_id,),
+            ).fetchone()
+            return int(row["n"]) if row is not None else 0
 
     def find_baseline_run_id(self, signature_hash: str, *, exclude_run_id: Optional[str] = None) -> Optional[str]:
         self.init()
