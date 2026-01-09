@@ -14,7 +14,7 @@ dependencies = []
 
 [project.optional-dependencies]
 psutil = ["psutil>=5.9"]
-pynvml = ["pynvml>=11.5"]
+gpu = ["pynvml>=11.5"]
 
 [project.scripts]
 testguard = "testguard.cli:entrypoint"

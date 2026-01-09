@@ -9,13 +9,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
           allow-prereleases: true
+
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+
       - name: Unit tests
         run: uv run python -m unittest discover -t . -s tests -p "test_*.py" -v
 
@@ -23,13 +29,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
           allow-prereleases: true
+
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+
+      - name: Create venv
+        run: uv venv
+
       - name: Install editable
         run: uv pip install -e .
 
