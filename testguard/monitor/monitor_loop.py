@@ -49,7 +49,9 @@ class MonitorLoop:
         fragments: Dict[str, float] = {}
         for collector in self._collectors:
             fragment = collector.sample(self._target)
-            fragments.update(fragment.values)
+            for key, value in fragment.items():
+                if key not in fragments:
+                    fragments[key] = value
 
         sample = Sample(
             ts_monotonic=time.monotonic(),
