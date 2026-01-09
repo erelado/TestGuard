@@ -15,7 +15,7 @@ from testguard.tail_buffer import TailBuffer
 from testguard.util import host_facts, signature_hash
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RunOptions:
     sample_interval_s: float
     warn_rss_mib: int

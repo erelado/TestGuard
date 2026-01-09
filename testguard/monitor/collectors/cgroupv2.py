@@ -96,7 +96,7 @@ def _try_create_run_cgroup(*, cgroup_root: Path, run_id: str, pid: int) -> Optio
         return None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CgroupV2Paths:
     cgroup_root: Path
     run_cgroup_dir: Optional[Path]

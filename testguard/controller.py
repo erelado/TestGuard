@@ -9,7 +9,7 @@ import time
 from typing import Optional
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ExitResult:
     exit_code: Optional[int]
     signal: Optional[int]

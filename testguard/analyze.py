@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Iterable
 from testguard.store.store import RunRecord, SampleRecord
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RunMetrics:
     duration_s: Optional[float]
     peak_rss_bytes: Optional[int]
@@ -38,7 +38,7 @@ def _extract_float(payload: dict, key: str) -> Optional[float]:
         return None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MetricDelta:
     current: Optional[float]
     baseline: Optional[float]
@@ -46,7 +46,7 @@ class MetricDelta:
     delta_pct: Optional[float]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DiffSummary:
     baseline_run_id: Optional[str]
     classification: str  # OK | WARN | REGRESSION | NO_BASELINE

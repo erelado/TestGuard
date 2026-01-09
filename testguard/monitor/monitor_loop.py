@@ -9,14 +9,14 @@ from testguard.monitor.collectors.base import CollectorAdapter, Target
 from testguard.monitor.ring_buffer import RingBuffer
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Sample:
     ts_monotonic: float
     ts_wall_epoch: float
     fragments: Dict[str, float]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MonitorConfig:
     sample_interval_s: float = 0.5
     max_consecutive_failures: int = 3

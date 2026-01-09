@@ -59,7 +59,7 @@ def parse_psi_pressure_text(pressure_text: str) -> Dict[str, float]:
     return result
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PsiCollector:
     name: str = "psi"
 

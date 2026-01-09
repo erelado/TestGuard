@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from testguard.monitor.collectors.base import CollectorAdapter, Target
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProcfsSample:
     rss_bytes: Optional[int]
     cpu_user_s: Optional[float]

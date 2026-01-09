@@ -17,7 +17,7 @@ from testguard.util import base_dir, db_path, host_facts, is_linux
 from testguard.util import runs_dir
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RunOptions:
     sample_interval_s: float
     warn_memory_mib: int
@@ -44,7 +44,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0.5,
         help="How often to sample resource usage, in seconds. Smaller values catch spikes better but add overhead.",
     )
-
     run_parser.add_argument(
         "--warn-memory-mib",
         "--warn-rss-mib",
@@ -57,7 +56,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "0 disables."
         ),
     )
-
     run_parser.add_argument(
         "--max-memory-mib",
         "--max-rss-mib",
@@ -70,7 +68,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "0 disables."
         ),
     )
-
     run_parser.add_argument(
         "--max-runtime-seconds",
         "--max-runtime-s",
@@ -79,7 +76,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Kill the run if it runs longer than this many seconds. Omit to disable.",
     )
-
     run_parser.add_argument(
         "--max-disk-write-mib-per-sec",
         "--disk-write-mib-s",
@@ -88,7 +84,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Kill if disk write rate stays above this many MiB/s for the sustain window. Omit to disable.",
     )
-
     run_parser.add_argument(
         "--disk-write-sustain-seconds",
         "--disk-write-sustain-s",
@@ -99,6 +94,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "How long (seconds) disk write rate must stay above the threshold before killing. "
             "Only applies if the disk write threshold is set."
         ),
+    )
+    run_parser.add_argument(
+        "--baseline",
+        dest="baseline_id",
+        default=None,
+        help="Optional baseline run_id for diff. If omitted, TestGuard picks the latest OK run with the same signature.",
     )
 
     list_parser = subparsers.add_parser("list", help="List recent runs")
@@ -190,7 +191,7 @@ def cmd_run(argv: List[str], cwd: str, run_options: RunOptions) -> int:
     run_record, current_metrics, diff_summary = _load_metrics_and_diff(
         store=store,
         run_id=run_id,
-        baseline_id=None,
+        baseline_id=run_options.baseline_id,
     )
 
     persist_summary_for_run(store, run_record)
@@ -204,7 +205,14 @@ def cmd_run(argv: List[str], cwd: str, run_options: RunOptions) -> int:
 
     print(render_report(run_record, current_metrics=current_metrics, diff_summary=diff_summary))
     print(f"artifacts_dir: {runs_dir() / run_id}")
-    return 0 if run_record.status == "OK" else 1
+
+    if run_record.status != "OK":
+        return 1
+
+    if diff_summary.classification == "REGRESSION":
+        return 1
+
+    return 0
 
 
 def cmd_list(limit: int) -> int:

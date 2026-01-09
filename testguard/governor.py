@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Thresholds:
     warn_rss_bytes: int
     max_rss_bytes: int
@@ -14,7 +14,7 @@ class Thresholds:
     disk_write_sustain_s: float = 3.0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class GovernorDecision:
     level: str  # "NONE" | "WARN" | "PANIC"
     policy_id: Optional[str]

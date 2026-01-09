@@ -54,7 +54,7 @@ def signature_hash(command_argv: List[str], cwd: str) -> str:
     return hashlib.sha256(blob).hexdigest()[:16]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class HostFacts:
     os: str
     kernel: str

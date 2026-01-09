@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from typing import Dict, Protocol, Set
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Target:
     root_pid: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SampleFragment:
     values: Dict[str, float]
 

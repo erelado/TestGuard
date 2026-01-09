@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Protocol
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RunMeta:
     run_id: str
     started_at: str
@@ -15,7 +15,7 @@ class RunMeta:
     run_config_json: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RunRecord:
     run_id: str
     started_at: str
@@ -37,7 +37,7 @@ class RunRecord:
     warnings_count: int = 0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SampleRecord:
     run_id: str
     ts_monotonic: float
@@ -45,7 +45,7 @@ class SampleRecord:
     payload_json: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class EventRecord:
     run_id: str
     ts_monotonic: float
@@ -53,7 +53,7 @@ class EventRecord:
     message: str
     policy_id: Optional[str]
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RunSummaryRecord:
     run_id: str
     peak_rss_bytes: Optional[int]
