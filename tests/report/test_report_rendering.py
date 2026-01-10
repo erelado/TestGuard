@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from testguard.analyze import RunMetrics, no_baseline_diff
+from testguard.analysis import RunMetrics, no_baseline_diff
 from testguard.report import render_list, render_report
 from testguard.store.sqlite_store import SQLiteRunStore
 from testguard.store.store import RunMeta
@@ -14,7 +14,7 @@ class TestReportRendering(unittest.TestCase):
     def test_render_list_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             database_path = Path(temp_dir) / "runs.db"
-            store = SQLiteRunStore(database_path)
+            store = SQLiteRunStore(database_path=database_path)
             store.init()
 
             command_argv = ["python", "-c", "print('x')"]
@@ -43,15 +43,15 @@ class TestReportRendering(unittest.TestCase):
             list_text = render_list(run_records)
             self.assertIn("20260109_000000_abcd", list_text)
 
-            run_record = store.load_run(meta.run_id)
+            run_record = store.load_run(run_id=meta.run_id)
 
-            # On macOS in this MVP, samples may be empty, so metrics are mostly None.
+            # On macOS samples may be empty, so metrics are mostly None.
             current_metrics = RunMetrics(
-                duration_s=run_record.duration_s,
-                peak_rss_bytes=None,
+                duration_seconds=run_record.duration_s,
+                peak_memory_bytes=None,
                 total_read_bytes=None,
                 total_write_bytes=None,
-                peak_write_rate_bytes_s=None,
+                peak_write_rate_bytes_per_second=None,
             )
             diff_summary = no_baseline_diff(current_metrics)
 

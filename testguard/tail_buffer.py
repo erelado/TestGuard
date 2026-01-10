@@ -5,6 +5,14 @@ from dataclasses import dataclass
 
 @dataclass
 class TailBuffer:
+    """
+    A bounded "tail" buffer for capturing the last N bytes of a stream
+
+    TailBuffer is used when reading process output (stdout/stderr) so it can persist useful context without
+    storing unbounded logs. As new chunks arrive, the buffer keeps at most `max_bytes` by evicting the oldest bytes,
+    leaving the most recent output, which is typically the most relevant (especially right before a panic/kill)
+    """
+
     max_bytes: int
     _data: bytearray = None  # type: ignore[assignment]
 

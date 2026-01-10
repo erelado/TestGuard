@@ -9,6 +9,13 @@ T = TypeVar("T")
 
 @dataclass
 class RingBuffer(Generic[T]):
+    """
+    Fixed-capacity in-memory buffer for keeping the most recent N items.
+
+    This is used by the monitor loop to retain only a recent window of samples (for example, the last 30 seconds),
+    while automatically discarding older items. It provides O(1) append and a snapshot() method to get the current
+    contents as a regular list for serialization or analysis.
+    """
     capacity: int
     _items: Deque[T] = None  # type: ignore[assignment]
 

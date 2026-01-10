@@ -4,17 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "testguard"
-version = "0.1.0"
-description = "Linux-first, local-first CLI wrapper for test resource monitoring and safety enforcement."
+version = "0.2.0"
+description = "Linux CLI wrapper for test resource monitoring and safety enforcement."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
-authors = [{name = "TestGuard Maintainers"}]
+license = { text = "MIT" }
+authors = [{ name = "TestGuard Maintainers" }]
+keywords = ["testing", "monitoring", "ci", "linux", "governor"]
 dependencies = []
 
 [project.optional-dependencies]
 psutil = ["psutil>=5.9"]
-gpu = ["pynvml>=11.5"]
+pynvml = ["pynvml>=11.5"]
+dev = ["pytest", "coverage", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/erelado/TestGuard"
+Repository = "https://github.com/erelado/TestGuard"
+Issues = "https://github.com/erelado/TestGuard/issues"
 
 [project.scripts]
 testguard = "testguard.cli:entrypoint"
@@ -22,3 +29,6 @@ testguard = "testguard.cli:entrypoint"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["testguard*"]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"

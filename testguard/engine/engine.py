@@ -6,12 +6,12 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from testguard.monitor.collectors.psi import PsiCollector
-from testguard.monitor.collectors.cgroupv2 import CgroupV2Collector
+from testguard.monitor.collectors.linux.psi import PsiCollector
+from testguard.monitor.collectors.linux.cgroupv2 import CgroupV2Collector
 from testguard.controller import ProcessHandle, SubprocessGroupController
 from testguard.logger import ContextLoggerAdapter, get_logger, get_named_logger
 from testguard.monitor.collectors.base import Target
-from testguard.monitor.collectors.procfs import ProcfsCollector
+from testguard.monitor.collectors.linux.procfs import ProcfsCollector
 from testguard.monitor.monitor_loop import MonitorConfig, MonitorLoop
 from testguard.store.sqlite_store import SQLiteRunStore
 from testguard.store.store import SampleRecord
@@ -258,7 +258,7 @@ class Engine:
             def flush_batch() -> None:
                 if not batch:
                     return
-                self._store.append_samples(run_id, list(batch))
+                self._store.append_samples(run_id=run_id, samples=list(batch))
                 batch.clear()
 
             while True:

@@ -11,7 +11,7 @@ class TestBaselineSelection(unittest.TestCase):
     def test_find_baseline_excludes_current(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_file = Path(tmp) / "runs.db"
-            store = SQLiteRunStore(db_file)
+            store = SQLiteRunStore(database_path=db_file)
             store.init()
 
             signature = "abc"

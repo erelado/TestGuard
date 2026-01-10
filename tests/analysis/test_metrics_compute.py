@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from testguard.analyze import compute_metrics
+from testguard.analysis import compute_metrics
 from testguard.store.store import RunRecord, SampleRecord
 
 
@@ -46,8 +46,8 @@ class TestComputeMetrics(unittest.TestCase):
 
         metrics = compute_metrics(run_record, samples)
 
-        self.assertEqual(metrics.peak_rss_bytes, 250)
+        self.assertEqual(metrics.peak_memory_bytes, 250)
         self.assertEqual(metrics.total_read_bytes, 40 - 10)
         self.assertEqual(metrics.total_write_bytes, 900 - 100)
         # write deltas: 400 in 1s, then 400 in 1s => peak 400 B/s
-        self.assertEqual(metrics.peak_write_rate_bytes_s, 400.0)
+        self.assertEqual(metrics.peak_write_rate_bytes_per_second, 400.0)

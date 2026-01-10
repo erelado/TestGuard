@@ -163,7 +163,7 @@ def build_optional_governor(run_options: RunOptions) -> Optional[Governor]:
         max_rss_bytes=rss_max_bytes,
         max_runtime_s=run_options.max_runtime_s,
         disk_write_rate_bytes_s=(
-                    run_options.disk_write_mib_s * 1024 * 1024) if run_options.disk_write_mib_s is not None else None,
+                run_options.disk_write_mib_s * 1024 * 1024) if run_options.disk_write_mib_s is not None else None,
         disk_write_sustain_s=run_options.disk_write_sustain_s,
     )
     return Governor(thresholds)
@@ -191,14 +191,13 @@ def make_ring_snapshot(monitor_loop: MonitorLoop) -> list:
 
 
 def append_event(store, *, run_id: str, event_type: str, message: str, policy_id: Optional[str]) -> None:
-    store.append_event(
-        EventRecord(
-            run_id=run_id,
-            ts_monotonic=time.monotonic(),
-            event_type=event_type,
-            message=message,
-            policy_id=policy_id,
-        )
+    store.append_event(event=EventRecord(
+        run_id=run_id,
+        ts_monotonic=time.monotonic(),
+        event_type=event_type,
+        message=message,
+        policy_id=policy_id,
+    )
     )
 
 

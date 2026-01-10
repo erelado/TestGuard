@@ -1,6 +1,6 @@
 import unittest
 
-from testguard.monitor.collectors import procfs
+from testguard.monitor.collectors.linux import procfs
 
 
 class TestProcfsParsing(unittest.TestCase):

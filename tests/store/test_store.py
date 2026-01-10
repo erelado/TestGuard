@@ -12,7 +12,7 @@ class TestSQLiteRunStore(unittest.TestCase):
     def test_create_finalize_load(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             database_path = Path(temp_dir) / "runs.db"
-            store = SQLiteRunStore(database_path)
+            store = SQLiteRunStore(database_path=database_path)
             store.init()
 
             command_argv = ["python", "-c", "print('x')"]
@@ -37,7 +37,7 @@ class TestSQLiteRunStore(unittest.TestCase):
                 notes=None,
             )
 
-            run_record = store.load_run(meta.run_id)
+            run_record = store.load_run(run_id=meta.run_id)
             self.assertEqual(run_record.run_id, meta.run_id)
             self.assertEqual(run_record.status, "OK")
             self.assertEqual(run_record.exit_code, 0)

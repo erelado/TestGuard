@@ -37,10 +37,10 @@ def configure_logging(log_level: str) -> None:
 
 
 def get_named_logger(
-    logger_name: str,
-    *,
-    run_id: Optional[str] = None,
-    policy_id: Optional[str] = None,
+        logger_name: str,
+        *,
+        run_id: Optional[str] = None,
+        policy_id: Optional[str] = None,
 ) -> ContextLoggerAdapter:
     base_logger = logging.getLogger(logger_name)
     return ContextLoggerAdapter(base_logger, {"run_id": run_id, "policy_id": policy_id})

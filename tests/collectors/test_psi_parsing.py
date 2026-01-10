@@ -1,6 +1,6 @@
 import unittest
 
-from testguard.monitor.collectors.psi import parse_psi_pressure_text
+from testguard.monitor.collectors.linux.psi import parse_psi_pressure_text
 
 
 class TestPsiParsing(unittest.TestCase):

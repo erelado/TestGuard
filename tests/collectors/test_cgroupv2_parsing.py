@@ -1,6 +1,6 @@
 import unittest
 
-from testguard.monitor.collectors.cgroupv2 import (
+from testguard.monitor.collectors.linux.cgroupv2 import (
     _parse_cpu_stat_seconds,
     _parse_io_stat_totals,
     _parse_memory_max_bytes,

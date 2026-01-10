@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS summaries (
 
 
 class SQLiteRunStore:
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, *, database_path: Path) -> None:
         self._database_path = database_path
 
     def _connect(self) -> sqlite3.Connection:
@@ -132,7 +132,7 @@ class SQLiteRunStore:
                 (ended_at, status, exit_code, signal, duration_s, notes, run_id),
             )
 
-    def load_run(self, run_id: str) -> RunRecord:
+    def load_run(self, *, run_id: str) -> RunRecord:
         with self._connect() as connection:
             row = connection.execute(
                 """
@@ -153,7 +153,7 @@ class SQLiteRunStore:
                 raise KeyError(f"Unknown run_id: {run_id}")
             return RunRecord(**dict(row))
 
-    def list_runs(self, limit: int = 50) -> List[RunRecord]:
+    def list_runs(self, *, limit: int = 50) -> List[RunRecord]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -172,10 +172,14 @@ class SQLiteRunStore:
 
             return [RunRecord(**dict(row)) for row in rows]
 
-    def append_samples(self, run_id: str, samples: List[SampleRecord]) -> None:
+    def append_samples(self, *, run_id: str, samples: List[SampleRecord]) -> None:
         if not samples:
             return
-        rows = [(s.run_id, s.ts_monotonic, s.ts_wall_epoch, s.payload_json) for s in samples]
+
+        for sample in samples:
+            assert sample.run_id == run_id, f"append_samples got mismatched run_id, expected={run_id} got={sample.run_id}"
+
+        rows = [(run_id, s.ts_monotonic, s.ts_wall_epoch, s.payload_json) for s in samples]
         with self._connect() as connection:
             connection.executemany(
                 """
@@ -185,7 +189,7 @@ class SQLiteRunStore:
                 rows,
             )
 
-    def append_event(self, event: EventRecord) -> None:
+    def append_event(self, *, event: EventRecord) -> None:
         with self._connect() as connection:
             connection.execute(
                 """
@@ -195,7 +199,7 @@ class SQLiteRunStore:
                 (event.run_id, event.ts_monotonic, event.event_type, event.message, event.policy_id),
             )
 
-    def upsert_summary(self, summary: RunSummaryRecord) -> None:
+    def upsert_summary(self, *, summary: RunSummaryRecord) -> None:
         self.init()
         with self._connect() as connection:
             connection.execute(
@@ -224,7 +228,7 @@ class SQLiteRunStore:
                 ),
             )
 
-    def count_warnings(self, run_id: str) -> int:
+    def count_warnings(self, *, run_id: str) -> int:
         self.init()
         with self._connect() as connection:
             row = connection.execute(
@@ -270,7 +274,7 @@ class SQLiteRunStore:
 
             return None if row is None else str(row["run_id"])
 
-    def list_samples(self, run_id: str) -> List[SampleRecord]:
+    def list_samples(self, *, run_id: str) -> List[SampleRecord]:
         self.init()
         with self._connect() as connection:
             rows = connection.execute(
