@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Iterable
 
+from testguard.store.retention import RetentionRun
 from testguard.store.store import EventRecord, RunMeta, RunRecord, SampleRecord, RunSummaryRecord
 
 _SCHEMA = """
@@ -287,3 +288,43 @@ class SQLiteRunStore:
                 (run_id,),
             ).fetchall()
             return [SampleRecord(**dict(row)) for row in rows]
+
+    def list_runs_for_retention(self) -> Iterable[RetentionRun]:
+        """
+        Return all runs with enough metadata to prune retention.
+        Uses ended_at as finished_at_epoch (converted to timestamp if ISO-like string).
+        """
+        self.init()
+        with self._connect() as connection:
+            # make sure columns exist if you later add them
+            cursor = connection.execute(
+                """
+                SELECT run_id, ended_at, cwd
+                FROM runs
+                WHERE ended_at IS NOT NULL
+                """
+            )
+            for run_id, ended_at, cwd in cursor.fetchall():
+                try:
+                    # Convert ISO string to epoch if possible
+                    import datetime
+                    finished_at_epoch = datetime.datetime.fromisoformat(ended_at).timestamp()
+                except Exception:
+                    finished_at_epoch = 0.0
+                yield RetentionRun(
+                    run_id=run_id,
+                    finished_at_epoch=finished_at_epoch,
+                    artifacts_dir=Path(cwd) / run_id if cwd else None,
+                )
+
+    def delete_run(self, *, run_id: str) -> None:
+        """
+        Delete a run and all associated rows (samples, events, summaries) from the local DB. This is used for local
+        retention policies when remote upload succeeds
+        """
+        self.init()
+        with self._connect() as connection:
+            connection.execute("DELETE FROM samples WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM events WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM summaries WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))

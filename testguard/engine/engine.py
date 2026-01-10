@@ -49,6 +49,8 @@ class Engine:
             max_runtime_s: Optional[float] = None,
             disk_write_mib_s: Optional[float] = None,
             disk_write_sustain_s: float = 3.0,
+            signature_label: Optional[str] = None,
+            tags: Optional[dict[str, str]] = None,
             kill_grace_s: float = 5.0,
             stdout_tail_kib: int = 256,
             stderr_tail_kib: int = 256,

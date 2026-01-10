@@ -48,10 +48,22 @@ def make_run_id() -> str:
     return f"{timestamp_local}_{suffix}"
 
 
-def signature_hash(command_argv: List[str], cwd: str) -> str:
-    payload = {"argv": command_argv, "cwd": cwd}
+def signature_hash(command_argv: List[str], cwd: str, *, signature_label: Optional[str] = None) -> str:
+    """
+    Compute a stable signature hash for grouping runs
+
+    If signature_label is provided, it becomes the primary grouping key and is intended to be stable across machines
+    and environments (recommended for CI). Otherwise, the fallback groups by argv + cwd, which is often not stable
+    across machines
+    """
+    if signature_label:
+        payload = {"signature_label": signature_label}
+    else:
+        payload = {"argv": command_argv, "cwd": cwd}
+
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()[:16]
+
 
 
 @dataclass(frozen=True, kw_only=True)

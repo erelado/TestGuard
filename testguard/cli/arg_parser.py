@@ -14,7 +14,11 @@ class RunOptions:
     max_runtime_seconds: Optional[float]
     disk_write_mebibytes_per_second: Optional[float]
     disk_write_sustain_seconds: float
+
     baseline_run_id: Optional[str]
+
+    signature_label: Optional[str]
+    tag_items: list[str]
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -26,6 +30,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run a command under TestGuard")
     run_parser.add_argument("--cwd", default=os.getcwd(), help="Working directory for the command")
     run_parser.add_argument("argv", nargs=argparse.REMAINDER, help="Command to run, after --")
+
+    run_parser.add_argument(
+        "--signature",
+        "--signature-label",
+        dest="signature_label",
+        default=None,
+        help=(
+            "Stable label to group runs for diffs and baselines. "
+            "Recommended for CI so comparisons stay stable across machines. "
+            "Example: 'pytest:unit'."
+        ),
+    )
+    run_parser.add_argument(
+        "--tag",
+        dest="tag_items",
+        action="append",
+        default=[],
+        help=(
+            "Attach a tag as key=value (repeatable). "
+            "Tags are stored in run_config_json and used later for filtering baselines across environments."
+        ),
+    )
     run_parser.add_argument(
         "--sample-interval-seconds",
         "--sample-every-seconds",
@@ -99,7 +125,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     report_parser = subparsers.add_parser("report", help="Show a stored run")
     report_parser.add_argument("run_id")
-    report_parser.add_argument("--baseline", dest="baseline_run_id", default=None, help="Optional baseline run_id for diff")
+    report_parser.add_argument("--baseline", dest="baseline_run_id", default=None,
+                               help="Optional baseline run_id for diff")
 
     diff_parser = subparsers.add_parser("diff", help="Diff a run vs a baseline")
     diff_parser.add_argument("run_id")

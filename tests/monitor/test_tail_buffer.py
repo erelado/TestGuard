@@ -1,5 +1,5 @@
 import unittest
-from testguard.tail_buffer import TailBuffer
+from engine.tail_buffer import TailBuffer
 
 
 class TestTailBuffer(unittest.TestCase):
