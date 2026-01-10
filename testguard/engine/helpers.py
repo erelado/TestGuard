@@ -11,7 +11,7 @@ from testguard.controller import ProcessHandle, SubprocessGroupController
 from testguard.governor import Governor, Thresholds
 from testguard.monitor.monitor_loop import MonitorLoop
 from testguard.store.store import EventRecord, RunMeta
-from engine.tail_buffer import TailBuffer
+from testguard.engine.tail_buffer import TailBuffer
 from testguard.util import host_facts, signature_hash
 
 
