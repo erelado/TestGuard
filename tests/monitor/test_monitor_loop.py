@@ -54,7 +54,7 @@ class TestMonitorLoop(unittest.TestCase):
         monitor = MonitorLoop(
             collectors=[c1, c2],
             target=DummyTarget(root_pid=12345),
-            config=MonitorConfig(sample_interval_s=0.1),
+            config=MonitorConfig(sample_interval_seconds=0.1),
             logger=logger,
         )
 
@@ -105,7 +105,7 @@ class TestMonitorLoop(unittest.TestCase):
         monitor = MonitorLoop(
             collectors=[],
             target=DummyTarget(root_pid=42),
-            config=MonitorConfig(sample_interval_s=0.001),
+            config=MonitorConfig(sample_interval_seconds=0.001),
             logger=logger,
         )
 

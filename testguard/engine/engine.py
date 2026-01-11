@@ -203,7 +203,7 @@ class Engine:
         collectors.append(PsiCollector())
 
         monitor_config = MonitorConfig(
-            sample_interval_s=run_options.sample_interval_s,
+            sample_interval_seconds=run_options.sample_interval_seconds,
             max_consecutive_failures=3,
             ring_buffer_seconds=30.0,
         )
@@ -270,7 +270,7 @@ class Engine:
             consecutive_failures = 0
             next_tick = time.monotonic()
 
-            monitor_logger.info("monitor started interval_s=%.3f", monitor_config.sample_interval_s)
+            monitor_logger.info("monitor started interval_s=%.3f", monitor_config.sample_interval_seconds)
 
             def flush_batch() -> None:
                 if not batch:
@@ -356,7 +356,7 @@ class Engine:
                         monitor_logger.error("monitor aborting after repeated failures")
                         return
 
-                next_tick += monitor_config.sample_interval_s
+                next_tick += monitor_config.sample_interval_seconds
 
         monitor_thread = threading.Thread(
             target=monitor_worker,

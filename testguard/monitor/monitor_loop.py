@@ -18,7 +18,7 @@ class Sample:
 
 @dataclass(frozen=True, kw_only=True)
 class MonitorConfig:
-    sample_interval_s: float = 0.5
+    sample_interval_seconds: float = 0.5
     max_consecutive_failures: int = 3
     ring_buffer_seconds: float = 30.0
 
@@ -51,7 +51,7 @@ class MonitorLoop:
         self._target = target
         self._config = config
 
-        ring_capacity = max(1, int(config.ring_buffer_seconds / config.sample_interval_s))
+        ring_capacity = max(1, int(config.ring_buffer_seconds / config.sample_interval_seconds))
         self._ring_buffer = RingBuffer[Sample](capacity=ring_capacity)
 
         self._logger = logger or get_named_logger(__name__)
@@ -153,7 +153,7 @@ class MonitorLoop:
           "now + interval" to avoid a busy catch-up loop
         - Stops after too many consecutive failures to prevent endless noisy loops
         """
-        sample_interval_seconds = float(self._config.sample_interval_s)
+        sample_interval_seconds = float(self._config.sample_interval_seconds)
         assert sample_interval_seconds > 0.0
 
         max_consecutive_failures = int(self._config.max_consecutive_failures)
