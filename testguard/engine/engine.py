@@ -43,30 +43,45 @@ class Engine:
             cwd: str,
             env: Dict[str, str],
             *,
-            sample_interval_s: float = 0.5,
-            warn_memory_mib: int = 0,
-            max_memory_mib: int = 0,
-            max_runtime_s: Optional[float] = None,
-            disk_write_mib_s: Optional[float] = None,
-            disk_write_sustain_s: float = 3.0,
-            signature_label: Optional[str] = None,
-            tags: Optional[dict[str, str]] = None,
-            kill_grace_s: float = 5.0,
+            sample_interval_seconds: float = 0.5,
+            warn_memory_mebibytes: int = 0,
+            max_memory_mebibytes: int = 0,
+            max_runtime_seconds: Optional[float] = None,
+            disk_write_mebibytes_per_second: Optional[float] = None,
+            disk_write_sustain_seconds: float = 3.0,
+            kill_grace_seconds: float = 5.0,
             stdout_tail_kib: int = 256,
             stderr_tail_kib: int = 256,
+            signature_label: Optional[str] = None,
+            tags: Optional[Dict[str, str]] = None,
     ) -> str:
         run_options = RunOptions(
-            sample_interval_s=sample_interval_s,
-            warn_rss_mib=warn_memory_mib,
-            max_rss_mib=max_memory_mib,
-            max_runtime_s=max_runtime_s,
-            disk_write_mib_s=disk_write_mib_s,
-            disk_write_sustain_s=disk_write_sustain_s,
-            kill_grace_s=kill_grace_s,
-            stdout_tail_kib=stdout_tail_kib,
-            stderr_tail_kib=stderr_tail_kib,
+            # Sampling
+            sample_interval_seconds=sample_interval_seconds,
+            # Memory thresholds
+            warn_memory_mebibytes=warn_memory_mebibytes,
+            max_memory_mebibytes=max_memory_mebibytes,
+            # Runtime threshold
+            max_runtime_seconds=max_runtime_seconds,
+            # Disk write thresholds
+            disk_write_mebibytes_per_second=disk_write_mebibytes_per_second,
+            disk_write_sustain_seconds=disk_write_sustain_seconds,
+            # Process termination behavior
+            kill_grace_seconds=kill_grace_seconds,
+            # Output capture
+            stdout_tail_kibibytes=stdout_tail_kib,
+            stderr_tail_kibibytes=stderr_tail_kib,
+            # Signature and tags
+            signature_label=signature_label,
+            tags=tags or {},
         )
-        return self._run_command_internal(command_argv=command_argv, cwd=cwd, env=env, run_options=run_options)
+
+        return self._run_command_internal(
+            command_argv=command_argv,
+            cwd=cwd,
+            env=env,
+            run_options=run_options,
+        )
 
     def _run_command_internal(self, *, command_argv: List[str], cwd: str, env: Dict[str, str],
                               run_options: RunOptions) -> str:
@@ -119,7 +134,7 @@ class Engine:
 
         if monitor_thread is not None:
             monitor_thread.join(timeout=2.0)
-        output_capture.join(timeout_s=2.0)
+        output_capture.join(timeout_seconds=2.0)
 
         self._finalize_run(
             run_id=run_id,

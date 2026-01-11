@@ -23,6 +23,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             disk_write_mebibytes_per_second=args.disk_write_mebibytes_per_second,
             disk_write_sustain_seconds=args.disk_write_sustain_seconds,
             baseline_run_id=args.baseline_run_id,
+            signature_label="default",
+            tag_items=[],
         )
         return cmd_run(args.argv, args.cwd, run_options)
 
