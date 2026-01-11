@@ -77,12 +77,19 @@ class SQLiteRunStore:
 
     def __init__(self, *, database_path: Path) -> None:
         self._database_path = database_path
+        self.init()
 
     # Internal helpers
 
     def _connect(self) -> sqlite3.Connection:
+        # Ensure parent exists even on a brand new CI runner.
+        self._database_path.parent.mkdir(parents=True, exist_ok=True)
+
         connection = sqlite3.connect(self._database_path)
         connection.row_factory = sqlite3.Row
+
+        # Good hygiene. Foreign keys are off by default per-connection in SQLite.
+        connection.execute("PRAGMA foreign_keys=ON;")
         return connection
 
     def _ensure_column(
@@ -102,12 +109,14 @@ class SQLiteRunStore:
     # Run lifecycle
 
     def create_run(self, meta: RunMeta) -> None:
-        """Insert a new run in RUNNING state."""
+        self.init()
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO runs (run_id, started_at, command_argv_json, cwd,
-                                  signature_hash, host_facts_json, run_config_json, status)
+                INSERT INTO runs (
+                    run_id, started_at, command_argv_json, cwd,
+                    signature_hash, host_facts_json, run_config_json, status
+                )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (

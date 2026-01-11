@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          out="$(uv run testguard run --max-memory-mib 8 -- python -m testguard.demo.workload --alloc-mib 128 --hold-s 5 || true)"
+          out="$(uv run testguard run --max-memory-mib 8 -- python -m testguard.demo.workload --alloc-mib 128 --hold-s 5 2>&1 || true)"
           echo "$out"
           run_id="$(echo "$out" | sed -n 's/^run_id: //p' | head -n1)"
           run_dir="$HOME/.testguard/runs/$run_id"
@@ -78,7 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          out="$(uv run testguard run --max-runtime-s 1 -- python -m testguard.demo.workload --hold-s 3 || true)"
+          out="$(uv run testguard run --max-runtime-s 1 -- python -m testguard.demo.workload --hold-s 3 2>&1 || true)"
           echo "$out"
           run_id="$(echo "$out" | sed -n 's/^run_id: //p' | head -n1)"
           run_dir="$HOME/.testguard/runs/$run_id"
